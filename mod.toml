@@ -1,0 +1,172 @@
+# Config file for an example Majora's Mask: Recompiled mod.
+
+# Fields that end up in the mod's manifest.
+[manifest]
+
+# Unique ID of this mod. Pick something long enough that it'll never be the same as any other mod.
+# The name displayed in the mod management menu is separate from this so this doesn't need to be human readable.
+id = "mm_bens_remastered_soundtrack"
+
+# Version of this mod.
+version = "0.1.0"
+
+# The name that will show up for this mod in the mod menu. This should be human readable.
+display_name = "Ben's Remastered Soundtrack"
+
+# The description that will show up when this mod is displayed in the mod menu. This should be human readable.
+description =  """
+Ben's Remastered Soundtrack. Requires MageMods' AudioAPI"""
+
+# A short description that will show up in this mod's entry in the mod list. This should be human readable and kept short
+# to prevent it from being cut off due to the limited space.
+short_description = "Ben's Remastered Sountrack"
+
+# Authors of this mod.
+authors = [ "Ben" ]
+
+# ID of the target recomp game.
+game_id = "mm"
+
+# Minimum version of the target recomp (e.g. Zelda 64: Recompiled) that this mod can run on.
+minimum_recomp_version = "1.2.1"
+
+# Dependency mods. Each entry is the mod's ID and then an optional minimum version of the dependency mod.
+dependencies = [
+    "magemods_audio_api:0.7.0",
+    "ProxyMM_Notifications:0.0.1"
+]
+
+# Optional dependency mods. This has the same format as `dependencies`, but the game will still start if dependencies in this
+# list aren't present. You can query the presence of a given dependency by using `recomp_is_dependency_met` in recomputils.h.
+# Calling a function imported from an optional dependency that isn't present will trigger an error.
+optional_dependencies = [
+    
+]
+
+# Native libraries (e.g. DLLs) and the functions they export.
+native_libraries = [
+# Example native library:
+#    { name = "my_native_library", funcs = ["my_native_library_function"] }
+]
+
+# Inputs to the mod tool.
+[inputs]
+
+# Input elf file to generate a mod from.
+elf_path = "build/mod.elf"
+
+# Output mod filename.
+mod_filename = "mm_bens_remastered_soundtrack"
+
+# Reference symbol files.
+func_reference_syms_file = "Zelda64RecompSyms/mm.us.rev1.syms.toml"
+data_reference_syms_files = [ "Zelda64RecompSyms/mm.us.rev1.datasyms.toml", "Zelda64RecompSyms/mm.us.rev1.datasyms_static.toml" ]
+
+# Additional files to include in the mod.
+additional_files = [
+    "audio/NA_BGM_ALIEN_INVASION.ogg",
+    "audio/NA_BGM_ASTRAL_OBSERVATORY.ogg",
+    "audio/NA_BGM_BALLAD_OF_THE_WIND_FISH.ogg",
+    "audio/NA_BGM_BASS_PLAY.ogg",
+    "audio/NA_BGM_BOSS.ogg",
+    "audio/NA_BGM_BREMEN_MARCH.ogg",
+    "audio/NA_BGM_CAVERN.ogg",
+    "audio/NA_BGM_CHASE.ogg",
+    "audio/NA_BGM_CLEAR_BOSS.ogg",
+    "audio/NA_BGM_CLEAR_EVENT.ogg",
+    "audio/NA_BGM_CLOCK_TOWER.ogg",
+    "audio/NA_BGM_CLOCK_TOWN_DAY_1.ogg",
+    "audio/NA_BGM_CLOCK_TOWN_DAY_2.ogg",
+    "audio/NA_BGM_CLOCK_TOWN_DAY_3.ogg",
+    "audio/NA_BGM_CREMIA_CARRIAGE.ogg",
+    "audio/NA_BGM_DEKU_PALACE.ogg",
+    "audio/NA_BGM_DRUMS_PLAY.ogg",
+    "audio/NA_BGM_DUNGEON_APPEAR.ogg",
+    "audio/NA_BGM_ELEGY_OF_EMPTINESS.ogg",
+    "audio/NA_BGM_END_CREDITS.ogg",
+    "audio/NA_BGM_END_CREDITS_SECOND_HALF.ogg",
+    "audio/NA_BGM_ENEMY.ogg",
+    "audio/NA_BGM_FAILURE_0.ogg",
+    "audio/NA_BGM_FAILURE_1.ogg",
+    "audio/NA_BGM_FAIRY_FOUNTAIN.ogg",
+    "audio/NA_BGM_FILE_SELECT.ogg",
+    "audio/NA_BGM_FINAL_HOURS.ogg",
+    "audio/NA_BGM_FROG_SONG.ogg",
+    "audio/NA_BGM_GAME_OVER.ogg",
+    "audio/NA_BGM_GATHERING_GIANTS.ogg",
+    "audio/NA_BGM_GET_HEART.ogg",
+    "audio/NA_BGM_GET_ITEM.ogg",
+    "audio/NA_BGM_GET_NEW_MASK.ogg",
+    "audio/NA_BGM_GET_SMALL_ITEM.ogg",
+    "audio/NA_BGM_GIANTS_THEME.ogg",
+    "audio/NA_BGM_GOODBYE_GIANT.ogg",
+    "audio/NA_BGM_GORON_GOAL.ogg",
+    "audio/NA_BGM_GORON_LULLABY.ogg",
+    "audio/NA_BGM_GORON_RACE.ogg",
+    "audio/NA_BGM_GORON_VILLAGE.ogg",
+    "audio/NA_BGM_GREAT_BAY_REGION.ogg",
+    "audio/NA_BGM_GREAT_BAY_TEMPLE.ogg",
+    "audio/NA_BGM_HAPPY_MASK_SALESMAN.ogg",
+    "audio/NA_BGM_HORSE.ogg",
+    "audio/NA_BGM_HORSE_GOAL.ogg",
+    "audio/NA_BGM_IKANA_CASTLE.ogg",
+    "audio/NA_BGM_IKANA_REGION.ogg",
+    "audio/NA_BGM_INDIGO_GO_SESSION.ogg",
+    "audio/NA_BGM_INGO.ogg",
+    "audio/NA_BGM_INSIDE_A_HOUSE.ogg",
+    "audio/NA_BGM_INTO_THE_MOON.ogg",
+    "audio/NA_BGM_INV_STONE_TOWER_TEMPLE.ogg",
+    "audio/NA_BGM_KAMARO_DANCE.ogg",
+    "audio/NA_BGM_KEATON_QUIZ.ogg",
+    "audio/NA_BGM_KOTAKE_POTION_SHOP.ogg",
+    "audio/NA_BGM_LEARNED_NEW_SONG.ogg",
+    "audio/NA_BGM_MAJORAS_INCARNATION.ogg",
+    "audio/NA_BGM_MAJORAS_MASK.ogg",
+    "audio/NA_BGM_MAJORAS_THEME.ogg",
+    "audio/NA_BGM_MAJORAS_WRATH.ogg",
+    "audio/NA_BGM_MARINE_RESEARCH_LAB.ogg",
+    "audio/NA_BGM_MAYORS_OFFICE.ogg",
+    "audio/NA_BGM_MIKAU_FINALE.ogg",
+    "audio/NA_BGM_MIKAU_RIFF.ogg",
+    "audio/NA_BGM_MILK_BAR.ogg",
+    "audio/NA_BGM_MINI_BOSS.ogg",
+    "audio/NA_BGM_MOONS_DESTRUCTION.ogg",
+    "audio/NA_BGM_MOUNTAIN_REGION.ogg",
+    "audio/NA_BGM_MUSIC_BOX_HOUSE.ogg",
+    "audio/NA_BGM_NEW_WAVE_BOSSA_NOVA.ogg",
+    "audio/NA_BGM_NEW_WAVE_VOCAL.ogg",
+    "audio/NA_BGM_OATH_TO_ORDER.ogg",
+    "audio/NA_BGM_OCARINA_GUITAR_BASS_SESSION.ogg",
+    "audio/NA_BGM_OPENING.ogg",
+    "audio/NA_BGM_OPEN_CHEST.ogg",
+    "audio/NA_BGM_OWL.ogg",
+    "audio/NA_BGM_PIANO_PLAY.ogg",
+    "audio/NA_BGM_PIANO_SESSION.ogg",
+    "audio/NA_BGM_PIRATES_FORTRESS.ogg",
+    "audio/NA_BGM_ROMANI_RANCH.ogg",
+    "audio/NA_BGM_ROSA_SISTERS.ogg",
+    "audio/NA_BGM_SARIAS_SONG.ogg",
+    "audio/NA_BGM_SHARPS_CURSE.ogg",
+    "audio/NA_BGM_SHOOTING_GALLERY.ogg",
+    "audio/NA_BGM_SHOP.ogg",
+    "audio/NA_BGM_SNOWHEAD_CLEAR.ogg",
+    "audio/NA_BGM_SNOWHEAD_TEMPLE.ogg",
+    "audio/NA_BGM_SONATA_OF_AWAKENING.ogg",
+    "audio/NA_BGM_SONG_OF_HEALING.ogg",
+    "audio/NA_BGM_SONG_OF_SOARING.ogg",
+    "audio/NA_BGM_SONG_OF_STORMS.ogg",
+    "audio/NA_BGM_STONE_TOWER_TEMPLE.ogg",
+    "audio/NA_BGM_SWAMP_CRUISE.ogg",
+    "audio/NA_BGM_SWAMP_REGION.ogg",
+    "audio/NA_BGM_SWORD_TRAINING_HALL.ogg",
+    "audio/NA_BGM_TATL_AND_TAEL.ogg",
+    "audio/NA_BGM_TERMINA_FIELD.ogg",
+    "audio/NA_BGM_TIMED_MINI_GAME.ogg",
+    "audio/NA_BGM_TITLE_THEME.ogg",
+    "audio/NA_BGM_WOODFALL_CLEAR.ogg",
+    "audio/NA_BGM_WOODFALL_TEMPLE.ogg",
+    "audio/NA_BGM_ZELDAS_LULLABY.ogg",
+    "audio/NA_BGM_ZELDA_APPEAR.ogg",
+    "audio/NA_BGM_ZORA_HALL.ogg",
+    "audio/NB_BGM_MORNING.ogg",
+ ]
