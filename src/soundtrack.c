@@ -10,11 +10,14 @@ RECOMP_IMPORT("ProxyMM_Notifications", void Notifications_Emit(const char* prefi
 
 #define REMASTER_CHANNEL 0
 #define OST_CHANNEL 1
-#define REMASTER_VOLUME 1.0f          // between 0.0f - 2.0f
 #define OST_VOLUME 1.0f               // between 0.0f - 2.0f
 #define CROSSFADE_DURATION_TICKS 180  // 180 ticks = 1 second
 
-static int activeChannel = REMASTER_CHANNEL;
+// -3 dB = 0.707, 0 dB = 1.0, +3 dB = 1.413
+static const f32 kRemasterVolumeTable[] = { 0.707f, 1.0f, 1.413f };
+
+static int activeChannel = -1;
+static f32 remasterVolumeMax = 1.0f;
 static f32 remasterVolume;
 static f32 ostVolume;
 static int fadeTimer;
@@ -226,6 +229,50 @@ RECOMP_CALLBACK("magemods_audio_api", AudioApi_Init) void onAudioApiInit() {
         fadeInCurve[i] = Math_SinF((f32)i / CROSSFADE_DURATION_TICKS * M_PI * 0.5f);
         fadeOutCurve[i] = Math_CosF((f32)i / CROSSFADE_DURATION_TICKS * M_PI * 0.5f);
     }
+
+    // Set defaults from config on first load
+    unsigned long volIdx = recomp_get_config_u32("remaster_volume");
+    if (volIdx >= ARRAY_COUNT(kRemasterVolumeTable)) {
+        volIdx = 1;
+    }
+    remasterVolumeMax = kRemasterVolumeTable[volIdx];
+
+    activeChannel = (recomp_get_config_u32("default_soundtrack") != 0)
+        ? OST_CHANNEL
+        : REMASTER_CHANNEL;
+}
+
+static void ApplyDefaultSoundtrackConfig(void) {
+    // Remaster volume: 0 = "-3 dB", 1 = "0 dB", 2 = "+3 dB"
+    unsigned long volIdx = recomp_get_config_u32("remaster_volume");
+    if (volIdx >= ARRAY_COUNT(kRemasterVolumeTable)) {
+        volIdx = 1; // fallback to 0 dB
+    }
+    remasterVolumeMax = kRemasterVolumeTable[volIdx];
+
+    // Reset to default on scene change: 0 = "Off", 1 = "On"
+    if (recomp_get_config_u32("reset_on_scene_change") == 0) {
+        return;
+    }
+
+    int configChannel = (recomp_get_config_u32("default_soundtrack") != 0)
+        ? OST_CHANNEL
+        : REMASTER_CHANNEL;
+
+    if (activeChannel != configChannel) {
+        activeChannel = configChannel;
+        fadeTimer = CROSSFADE_DURATION_TICKS;
+
+        if (activeChannel == REMASTER_CHANNEL) {
+            Notifications_Emit("Ben's RST", "Active:", "REMASTER");
+        } else {
+            Notifications_Emit("Ben's RST", "Active:", "CD OST");
+        }
+    }
+}
+
+RECOMP_HOOK("Play_Init") void onPlayInit(GameState* gameState) {
+    ApplyDefaultSoundtrackConfig();
 }
 
 RECOMP_HOOK("AudioScript_ProcessSequences") void onProcessSequences() {
@@ -241,10 +288,10 @@ RECOMP_HOOK("AudioScript_ProcessSequences") void onProcessSequences() {
     }
 
     if (activeChannel == REMASTER_CHANNEL) {
-        remasterVolume = fadeIn * REMASTER_VOLUME;
+        remasterVolume = fadeIn * remasterVolumeMax;
         ostVolume = fadeOut * OST_VOLUME;
     } else {
-        remasterVolume = fadeOut * REMASTER_VOLUME;
+        remasterVolume = fadeOut * remasterVolumeMax;
         ostVolume = fadeIn * OST_VOLUME;
     }
 }
@@ -281,7 +328,9 @@ RECOMP_HOOK("AudioScript_SequencePlayerProcessSound") void onSequencePlayerProce
 }
 
 RECOMP_HOOK("Graph_ExecuteAndDraw") void onGraphExecuteAndDraw(GraphicsContext* gfxCtx, GameState* gameState) {
-    if (CHECK_BTN_ALL(CONTROLLER1(gameState)->press.button, BTN_L)) {
+    // Quick switch with L: 0 = "On", 1 = "Off"
+    if (recomp_get_config_u32("quick_switch_l") == 0 &&
+        CHECK_BTN_ALL(CONTROLLER1(gameState)->press.button, BTN_L)) {
         activeChannel = (activeChannel + 1) % 2;
         fadeTimer = CROSSFADE_DURATION_TICKS;
 

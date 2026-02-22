@@ -8,7 +8,7 @@
 id = "mm_bens_remastered_soundtrack"
 
 # Version of this mod.
-version = "0.1.0"
+version = "1.0.0"
 
 # The name that will show up for this mod in the mod menu. This should be human readable.
 display_name = "Ben's Remastered Soundtrack"
@@ -19,7 +19,7 @@ Ben's Remastered Soundtrack. Requires MageMods' AudioAPI"""
 
 # A short description that will show up in this mod's entry in the mod list. This should be human readable and kept short
 # to prevent it from being cut off due to the limited space.
-short_description = "Ben's Remastered Sountrack"
+short_description = "Ben's Remastered Soundtrack"
 
 # Authors of this mod.
 authors = [ "Ben" ]
@@ -32,7 +32,7 @@ minimum_recomp_version = "1.2.1"
 
 # Dependency mods. Each entry is the mod's ID and then an optional minimum version of the dependency mod.
 dependencies = [
-    "magemods_audio_api:0.7.0",
+    "magemods_audio_api:0.7.2",
     "ProxyMM_Notifications:0.0.1"
 ]
 
@@ -170,3 +170,36 @@ additional_files = [
     "audio/NA_BGM_ZORA_HALL.ogg",
     "audio/NB_BGM_MORNING.ogg",
  ]
+
+# Config options shown in the mod's settings UI.
+[[manifest.config_options]]
+id = "quick_switch_l"
+name = "Quick Switch Soundtrack (L Button)"
+description = "Press L during gameplay to toggle between Remastered and OST soundtracks."
+type = "Enum"
+options = [ "On", "Off" ]
+default = "On"
+
+[[manifest.config_options]]
+id = "remaster_volume"
+name = "Remaster Volume"
+description = "Volume adjustment for the remastered soundtrack."
+type = "Enum"
+options = [ "-3 dB", "0 dB", "+3 dB" ]
+default = "0 dB"
+
+[[manifest.config_options]]
+id = "default_soundtrack"
+name = "Default Soundtrack"
+description = "Choose which soundtrack plays by default."
+type = "Enum"
+options = [ "Remastered", "OST" ]
+default = "Remastered"
+
+[[manifest.config_options]]
+id = "reset_on_scene_change"
+name = "Reset to Default on Scene Change"
+description = "When enabled, switching scenes resets the soundtrack to the Default Soundtrack setting. When disabled, the current soundtrack persists across scene changes."
+type = "Enum"
+options = [ "Off", "On" ]
+default = "Off"

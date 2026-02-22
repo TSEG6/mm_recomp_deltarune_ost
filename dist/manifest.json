@@ -1,0 +1,10 @@
+{
+    "name": "Bens_Remastered_Soundtrack",
+    "version_number": "0.1.0",
+    "website_url": "https://github.com/B3n-17/mm_bens_remastered_soundtrack",
+    "description": "A music mod for Majora's Mask: Recompiled that replaces in-game soundtrack with remastered audio. Features a dual-channel system letting you crossfade between the remastered soundtrack and the original CD OST in real time by pressing the toggle map key.",
+    "dependencies": [
+        "MAA-Audio_API-0.7.2",
+        "ProxyMM-Notifications-0.0.1"
+    ]
+}
