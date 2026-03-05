@@ -59,6 +59,12 @@ typedef enum : u32 {
     AUDIOAPI_SEQ_IO_FROG,          // Frog Song beat pulses on IO_PORT_0 for minigame timing
 } AudioApiSequenceIO;
 
+typedef enum : u32 {
+    AUDIOAPI_BGM_BLEND_SOURCE_ENEMY = 0,
+    AUDIOAPI_BGM_BLEND_SOURCE_SUB_SPATIAL = 1,
+    AUDIOAPI_BGM_BLEND_SOURCE_SUB_NONSPATIAL = 2,
+} AudioApiBgmBlendSource;
+
 typedef struct AudioApiFileInfo {
     u32 resourceId;
     u32 trackCount;
@@ -71,6 +77,20 @@ typedef struct AudioApiFileInfo {
     AudioApiChannelType channelType;
     AudioApiCacheStrategy cacheStrategy;
 } AudioApiFileInfo;
+
+typedef struct AudioApiFileInfo2 {
+    u32 resourceId;
+    u32 trackCount;
+    u32 sampleRate;
+    u32 sampleCount;
+    u32 loopStart;
+    u32 loopEnd;
+    s32 loopCount;
+    AudioApiCodec codec;
+    AudioApiChannelType channelType;
+    AudioApiCacheStrategy cacheStrategy;
+    s8 volumeOffset;
+} AudioApiFileInfo2;
 
 typedef struct AudioApiResourceInfo {
     u32 resourceId;

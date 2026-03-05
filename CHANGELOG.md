@@ -1,6 +1,13 @@
 # Changelog
 
-## v0.1.0 - Initial Release
+## v1.0.1
+### Added
+- Per track volume configuration; this was added, but not yet fine-tuned
+### Changed
+- Default Streamed Audio note velocity is now 100 (was: 127). This makes the soundtrack a bit lower in volume
+- Moved OST replacement specific behavior from Audio API to downstream mod, to prevent API from having too opinionated default behaviors
+
+## v1.0.0 - Initial Release
 
 ### Features
 - 105 remastered OGG audio tracks replacing the original Majora's Mask soundtrack

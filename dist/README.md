@@ -10,6 +10,6 @@ A music mod for Majora's Mask: Recompiled that replaces in-game soundtrack with 
 - Choose your default soundtrack in config
 
 ### Dependencies
-- [MageMods AudioAPI](https://github.com/MageMods) v0.7.2+
+- [MageMods AudioAPI](https://github.com/MageMods) v0.8.1+
 - [ProxyMM Notifications](https://github.com/ProxyMM) v0.0.1+
 - Zelda 64: Recompiled v1.2.1+

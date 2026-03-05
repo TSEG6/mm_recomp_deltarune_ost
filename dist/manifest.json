@@ -1,10 +1,10 @@
 {
     "name": "Bens_Remastered_Soundtrack",
-    "version_number": "0.1.0",
+    "version_number": "1.0.1",
     "website_url": "https://github.com/B3n-17/mm_bens_remastered_soundtrack",
     "description": "A music mod that replaces in-game soundtrack with remastered audio with crossfade between the remastered and original CD soundtrack.",
     "dependencies": [
-        "MAA-Audio_API-0.7.2",
+        "MAA-Audio_API-0.8.1",
         "ProxyMM-Notifications-0.0.1"
     ]
 }
