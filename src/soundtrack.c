@@ -7,9 +7,6 @@
 
 RECOMP_IMPORT("magemods_audio_api", s32 AudioApi_GetSeqPlayerSeqId(SequencePlayer* seqPlayer));
 RECOMP_IMPORT("ProxyMM_Notifications", void Notifications_Emit(const char* prefix, const char* msg, const char* suffix));
-RECOMP_DECLARE_EVENT(AudioApi_EnemyBgmSplit(s8 volumeSplit));
-RECOMP_DECLARE_EVENT(AudioApi_SubBgmBlend(s8 volumeSplit));
-RECOMP_DECLARE_EVENT(AudioApi_BgmBlendIntent(AudioApiBgmBlendSource source, s8 volumeSplit));
 
 #define REMASTER_CHANNEL 0
 #define OST_CHANNEL 1
