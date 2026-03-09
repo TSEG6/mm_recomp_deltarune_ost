@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.0.1
+## v1.0.2
 ### Added
 - Per track volume configuration; this was added, but not yet fine-tuned
 ### Changed
