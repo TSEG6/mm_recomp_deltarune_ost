@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.3
+### Fixed
+- Keaton not looping
+### Improved
+- Sun's song truncated reducing gap to next track
+
 ## v1.0.2
 ### Added
 - Per track volume configuration; this was added, but not yet fine-tuned
@@ -24,6 +30,6 @@
 - Pointer variant coverage for Clock Town Day 2, Fairy Fountain, Milk Bar duplicate, and Majora's Lair
 
 ### Dependencies
-- Requires MageMods AudioAPI v0.5.0+
+- Requires MageMods AudioAPI v0.8.4+
 - Requires ProxyMM Notifications v0.0.1+
 - Built for Zelda 64: Recompiled v1.2.1+
