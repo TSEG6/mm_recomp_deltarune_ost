@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.4
+### Added
+- Support for [Music Randomizer v1.0.0](https://thunderstore.io/c/zelda-64-recompiled/p/Asticky/Music_Randomizer/)
+
 ## v1.0.3
 ### Fixed
 - Keaton not looping
