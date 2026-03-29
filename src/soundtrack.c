@@ -228,9 +228,7 @@ static void LoadAndBindStreamedSequence(ostSeqMap* spec) {
         seqId = AudioApi_CreateStreamedBgmEx(&info2, (char*)modPath, spec->file, spec->seqIO);
         spec->bankNo = AudioApi_GetSequenceFont(seqId, 0);
     }
-
-    recomp_printf("Song %x has font id %x.\n", spec->key, AudioApi_GetSequenceFont(seqId, 0));
-
+    
     if (seqId >= 0) {
         u8 seqFlags = (u8)spec->flags;
 
