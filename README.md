@@ -1,15 +1,17 @@
-# Ben's Remastered Soundtrack
+# Deltarune OST In Majora's Mask
 
-A music mod for Majora's Mask: Recompiled that replaces in-game soundtrack with remastered audio. Features a dual-channel system letting you crossfade between the remastered soundtrack and the original CD OST in real time by pressing the toggle map key.
+A music mod for Majora's Mask: Recompiled that replaces in-game soundtrack with some of the current deltarune (ch1-4) soundtrack.
 
-### Features
-- 105 remastered tracks covering overworld, dungeons, towns, bosses, cutscenes, fanfares, and credits
-- Dual-channel audio: remaster on even channels, original OST on odd channels
-- Press **L** to toggle between Remaster and CD OST with a smooth crossfade (L mapping can be disabled in config)
-- On-screen notification when switching channels
-- Choose your default soundtrack in config
+As of writing this there are 133 audio files that replace Majora's Mask OST.
+
+Wait... there's not 133 tracks in MM what gives???
+
+Well... I added the ability for a single track to have variants.
+
+So... lets say the track Cavern plays in many spots (it does) and you wanted it to play a different replacement in one room or multiple, you can do that.
+
+A guide is provided in the soundtrack.c file on how that system works and how you could use it to add your own variants.
 
 ### Dependencies
 - [MageMods AudioAPI](https://github.com/MageMods) v0.8.1+
-- [ProxyMM Notifications](https://github.com/ProxyMM) v0.0.1+
 - Zelda 64: Recompiled v1.2.1+
