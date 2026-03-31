@@ -5,35 +5,35 @@
 
 # Unique ID of this mod. Pick something long enough that it'll never be the same as any other mod.
 # The name displayed in the mod management menu is separate from this so this doesn't need to be human readable.
-id = "mm_bens_remastered_soundtrack"
+id = "mm_recomp_deltarune_ost"
 
 # Version of this mod.
-version = "1.0.4"
+version = "1.0.0"
 
 # The name that will show up for this mod in the mod menu. This should be human readable.
-display_name = "Ben's Remastered Soundtrack"
+display_name = "DELTARUNE Music Pack"
 
 # The description that will show up when this mod is displayed in the mod menu. This should be human readable.
 description =  """
-Ben's Remastered Soundtrack. Requires MageMods' AudioAPI"""
+This mod replaces the games soundtrack with DELTARUNE's soundtrack with a few manual edits here and there to fit the game better. 
+Special thanks to Ben for providing a base music replacement mod & danielryb for ideas and coding assistance!"""
 
 # A short description that will show up in this mod's entry in the mod list. This should be human readable and kept short
 # to prevent it from being cut off due to the limited space.
-short_description = "Ben's Remastered Soundtrack"
+short_description = "DELTARUNE's soundtrack is now in Majora's Mask"
 
 # Authors of this mod.
-authors = [ "Ben" ]
+authors = [ "TSEG" ]
 
 # ID of the target recomp game.
 game_id = "mm"
 
 # Minimum version of the target recomp (e.g. Zelda 64: Recompiled) that this mod can run on.
-minimum_recomp_version = "1.2.1"
+minimum_recomp_version = "1.2.2"
 
 # Dependency mods. Each entry is the mod's ID and then an optional minimum version of the dependency mod.
 dependencies = [
     "magemods_audio_api:0.8.4",
-    "ProxyMM_Notifications:0.0.1"
 ]
 
 # Optional dependency mods. This has the same format as `dependencies`, but the game will still start if dependencies in this
@@ -56,7 +56,7 @@ native_libraries = [
 elf_path = "build/mod.elf"
 
 # Output mod filename.
-mod_filename = "mm_bens_remastered_soundtrack"
+mod_filename = "mm_recomp_deltarune_ost"
 
 # Reference symbol files.
 func_reference_syms_file = "Zelda64RecompSyms/mm.us.rev1.syms.toml"
@@ -65,12 +65,18 @@ data_reference_syms_files = [ "Zelda64RecompSyms/mm.us.rev1.datasyms.toml", "Zel
 # Additional files to include in the mod.
 additional_files = [
     "audio/NA_BGM_ALIEN_INVASION.ogg",
+	"audio/NA_BGM_ALIEN_SCENE.ogg",
     "audio/NA_BGM_ASTRAL_OBSERVATORY.ogg",
     "audio/NA_BGM_BALLAD_OF_THE_WIND_FISH.ogg",
     "audio/NA_BGM_BASS_PLAY.ogg",
     "audio/NA_BGM_BOSS.ogg",
+	"audio/NA_BGM_BOSS_2.ogg",
+	"audio/NA_BGM_BOSS_3.ogg",
+	"audio/NA_BGM_BOSS_4.ogg",
     "audio/NA_BGM_BREMEN_MARCH.ogg",
     "audio/NA_BGM_CAVERN.ogg",
+	"audio/NA_BGM_CAVERN_2.ogg",
+	"audio/NA_BGM_CAVERN_3.ogg",
     "audio/NA_BGM_CHASE.ogg",
     "audio/NA_BGM_CLEAR_BOSS.ogg",
     "audio/NA_BGM_CLEAR_EVENT.ogg",
@@ -78,6 +84,7 @@ additional_files = [
     "audio/NA_BGM_CLOCK_TOWN_DAY_1.ogg",
     "audio/NA_BGM_CLOCK_TOWN_DAY_2.ogg",
     "audio/NA_BGM_CLOCK_TOWN_DAY_3.ogg",
+	"audio/NA_BGM_CLOCK_TOWN_DAY_4.ogg",
     "audio/NA_BGM_CREMIA_CARRIAGE.ogg",
     "audio/NA_BGM_DEKU_PALACE.ogg",
     "audio/NA_BGM_DRUMS_PLAY.ogg",
@@ -86,13 +93,18 @@ additional_files = [
     "audio/NA_BGM_END_CREDITS.ogg",
     "audio/NA_BGM_END_CREDITS_SECOND_HALF.ogg",
     "audio/NA_BGM_ENEMY.ogg",
+	"audio/NA_BGM_ENEMY_2.ogg",
+	"audio/NA_BGM_ENEMY_3.ogg",
     "audio/NA_BGM_FAILURE_0.ogg",
     "audio/NA_BGM_FAILURE_1.ogg",
     "audio/NA_BGM_FAIRY_FOUNTAIN.ogg",
     "audio/NA_BGM_FILE_SELECT.ogg",
+	"audio/NA_BGM_FILE_SELECT_2.ogg",
+	"audio/NA_BGM_FILE_SELECT_3.ogg",
     "audio/NA_BGM_FINAL_HOURS.ogg",
     "audio/NA_BGM_FROG_SONG.ogg",
     "audio/NA_BGM_GAME_OVER.ogg",
+	"audio/NA_BGM_SWOON.ogg",
     "audio/NA_BGM_GATHERING_GIANTS.ogg",
     "audio/NA_BGM_GET_HEART.ogg",
     "audio/NA_BGM_GET_ITEM.ogg",
@@ -123,13 +135,18 @@ additional_files = [
     "audio/NA_BGM_MAJORAS_INCARNATION.ogg",
     "audio/NA_BGM_MAJORAS_MASK.ogg",
     "audio/NA_BGM_MAJORAS_THEME.ogg",
+	"audio/NA_BGM_MAJORAS_THEME_ROOF.ogg",
     "audio/NA_BGM_MAJORAS_WRATH.ogg",
     "audio/NA_BGM_MARINE_RESEARCH_LAB.ogg",
+	"audio/NA_BGM_MARINE_RESEARCH_LAB_2.ogg",
     "audio/NA_BGM_MAYORS_OFFICE.ogg",
     "audio/NA_BGM_MIKAU_FINALE.ogg",
     "audio/NA_BGM_MIKAU_RIFF.ogg",
     "audio/NA_BGM_MILK_BAR.ogg",
     "audio/NA_BGM_MINI_BOSS.ogg",
+	"audio/NA_BGM_MINI_BOSS_2.ogg",
+	"audio/NA_BGM_MINI_BOSS_ROOF.ogg",
+	"audio/NA_BGM_MINI_BOSS_BK.ogg",
     "audio/NA_BGM_MOONS_DESTRUCTION.ogg",
     "audio/NA_BGM_MOUNTAIN_REGION.ogg",
     "audio/NA_BGM_MUSIC_BOX_HOUSE.ogg",
@@ -144,11 +161,14 @@ additional_files = [
     "audio/NA_BGM_PIANO_SESSION.ogg",
     "audio/NA_BGM_PIRATES_FORTRESS.ogg",
     "audio/NA_BGM_ROMANI_RANCH.ogg",
+	"audio/NA_BGM_ROMANI_RANCH_ALT.ogg",
     "audio/NA_BGM_ROSA_SISTERS.ogg",
     "audio/NA_BGM_SARIAS_SONG.ogg",
     "audio/NA_BGM_SHARPS_CURSE.ogg",
     "audio/NA_BGM_SHOOTING_GALLERY.ogg",
     "audio/NA_BGM_SHOP.ogg",
+	"audio/NA_BGM_SHOP_2.ogg",
+	"audio/NA_BGM_SHOP_3.ogg",
     "audio/NA_BGM_SNOWHEAD_CLEAR.ogg",
     "audio/NA_BGM_SNOWHEAD_TEMPLE.ogg",
     "audio/NA_BGM_SONATA_OF_AWAKENING.ogg",
@@ -157,10 +177,13 @@ additional_files = [
     "audio/NA_BGM_SONG_OF_STORMS.ogg",
     "audio/NA_BGM_STONE_TOWER_TEMPLE.ogg",
     "audio/NA_BGM_SWAMP_CRUISE.ogg",
+	"audio/NA_BGM_SWAMP_CRUISE_ALT.ogg",
     "audio/NA_BGM_SWAMP_REGION.ogg",
     "audio/NA_BGM_SWORD_TRAINING_HALL.ogg",
     "audio/NA_BGM_TATL_AND_TAEL.ogg",
     "audio/NA_BGM_TERMINA_FIELD.ogg",
+	"audio/NA_BGM_TERMINA_FIELD_SWORD.ogg",
+	"audio/NA_BGM_TERMINA_FIELD_SWORD_SLOW.ogg",
     "audio/NA_BGM_TIMED_MINI_GAME.ogg",
     "audio/NA_BGM_TITLE_THEME.ogg",
     "audio/NA_BGM_WOODFALL_CLEAR.ogg",
@@ -168,38 +191,20 @@ additional_files = [
     "audio/NA_BGM_ZELDAS_LULLABY.ogg",
     "audio/NA_BGM_ZELDA_APPEAR.ogg",
     "audio/NA_BGM_ZORA_HALL.ogg",
+	"audio/NA_BGM_ZORA_HALL_ALT.ogg",
     "audio/NB_BGM_MORNING.ogg",
+	"audio/KNIGHT_ROAR.ogg",
+	"audio/KNIGHT_WIND.ogg",
+	"audio/NA_BGM_MAJORA.ogg",
+	"audio/NA_BGM_MBHCLOSET.ogg",
+	"thumb.png"
  ]
 
-# Config options shown in the mod's settings UI.
-[[manifest.config_options]]
-id = "quick_switch_l"
-name = "Quick Switch Soundtrack (L Button)"
-description = "Press L during gameplay to toggle between Remastered and OST soundtracks."
-type = "Enum"
-options = [ "On", "Off" ]
-default = "On"
 
 [[manifest.config_options]]
-id = "remaster_volume"
-name = "Remaster Volume"
-description = "Volume adjustment for the remastered soundtrack."
+id = "winding"
+name = "Skull Kid Winding"
+description = "Should Skull Kid play the knight winding sfx before the roar occurs."
 type = "Enum"
-options = [ "-3 dB", "0 dB", "+3 dB" ]
-default = "0 dB"
-
-[[manifest.config_options]]
-id = "default_soundtrack"
-name = "Default Soundtrack"
-description = "Choose which soundtrack plays by default."
-type = "Enum"
-options = [ "Remastered", "OST" ]
-default = "Remastered"
-
-[[manifest.config_options]]
-id = "reset_on_scene_change"
-name = "Reset to Default on Scene Change"
-description = "When enabled, switching scenes resets the soundtrack to the Default Soundtrack setting. When disabled, the current soundtrack persists across scene changes."
-type = "Enum"
-options = [ "Off", "On" ]
-default = "Off"
+options = [ "Yes", "No" ]
+default = "Yes"

@@ -1,34 +1,49 @@
+﻿
+// Based on Ben's Remastered Soundtrack
+
 #include "global.h"
 #include "recomp/modding.h"
 #include "recomp/recomputils.h"
 #include "audio_api/sequence.h"
 #include "audio_api/porcelain.h"
 #include "recomp/recompconfig.h"
+#include "z64save.h"
+#include "overlays/gamestates/ovl_file_choose/z_file_select.h"
+#include "z_dm_stk.h"
+#include "assets/objects/object_stk2/object_stk2.h"
+#include "assets/objects/object_stk3/object_stk3.h"
+#include "z64player.h"
 
 RECOMP_IMPORT("magemods_audio_api", s32 AudioApi_GetSeqPlayerSeqId(SequencePlayer* seqPlayer));
-RECOMP_IMPORT("ProxyMM_Notifications", void Notifications_Emit(const char* prefix, const char* msg, const char* suffix));
 
 #define REMASTER_CHANNEL 0
-#define OST_CHANNEL 1
-#define OST_VOLUME 1.0f               // between 0.0f - 2.0f
-#define CROSSFADE_DURATION_TICKS 180  // 180 ticks = 1 second
+#define OST_CHANNEL 1                   // Unused
+#define REMASTER_VOLUME 1.33f
+#define OST_VOLUME 0.0f                 // Unused
+#define CROSSFADE_DURATION_TICKS 20     // Unused
 
-// -3 dB = 0.707, 0 dB = 1.0, +3 dB = 1.413
-static const f32 kRemasterVolumeTable[] = { 0.707f, 1.0f, 1.413f };
 
-static int activeChannel = -1;
-static f32 remasterVolumeMax = 1.0f;
+// A lot of the fading between replacements and originals have been "left in" (just forcefully disabled)
+
+static int activeChannel = REMASTER_CHANNEL;
 static f32 remasterVolume;
 static f32 ostVolume;
-static f32 remasterVolumeUnducked;
-static f32 ostVolumeUnducked;
-static f32 remasterVolumeSub;
-static f32 ostVolumeSub;
-static f32 enemyBlendAmount;
-static f32 subBlendAmount;
 static int fadeTimer;
 static f32 fadeInCurve[CROSSFADE_DURATION_TICKS];
 static f32 fadeOutCurve[CROSSFADE_DURATION_TICKS];
+static s32 lastScene = -1;
+static s32 lastRoom = -1;
+static const char* modPath = NULL;
+static int SwordValue = 0;
+static int Swoon = 0;
+static bool pendingSwoon = false;
+bool disableSwitchingOnCurrentTrack[SEQ_PLAYER_MAX];
+
+typedef enum {
+
+    /* 31 */ SK_ANIM_OCARINA_JUGGLE,
+
+} SkullKidAnimation;
 
 static int seqPlayers[] = {
     SEQ_PLAYER_BGM_MAIN,
@@ -36,297 +51,627 @@ static int seqPlayers[] = {
     SEQ_PLAYER_BGM_SUB,
 };
 
-static void ResetBgmChannelDisableMasks(void) {
-    SEQCMD_SET_CHANNEL_DISABLE_MASK(SEQ_PLAYER_BGM_MAIN, 0);
-    SEQCMD_SET_CHANNEL_DISABLE_MASK(SEQ_PLAYER_BGM_SUB, 0);
-}
-
 typedef enum {
     STREAM_BGM = 0,
-    STREAM_FANFARE = 1
+    STREAM_FANFARE = 1,
 } ostStreamKind;
 
-typedef enum {
-    OST_SEQ_FLAGS_NONE = 0,
-    OST_SEQ_FLAGS_ENEMY = SEQ_FLAG_ENEMY,
-    OST_SEQ_FLAGS_FANFARE = SEQ_FLAG_FANFARE,
-    OST_SEQ_FLAGS_FANFARE_KAMARO = SEQ_FLAG_FANFARE_KAMARO,
-    OST_SEQ_FLAGS_RESTORE = SEQ_FLAG_RESTORE,
-    OST_SEQ_FLAGS_RESUME = SEQ_FLAG_RESUME,
-    OST_SEQ_FLAGS_RESUME_PREV = SEQ_FLAG_RESUME_PREV,
-    OST_SEQ_FLAGS_SKIP_HARP_INTRO = SEQ_FLAG_SKIP_HARP_INTRO,
-    OST_SEQ_FLAGS_NO_AMBIENCE = SEQ_FLAG_NO_AMBIENCE,
-} ostSeqFlags;
-
+// This is the struct for the music replacements
 typedef struct {
-    s32 key;            // NA_BGM_* enum to replace
-    char file[64];      // writable filename buffer
-    ostStreamKind kind; // STREAM_BGM or STREAM_FANFARE
-    AudioApiSequenceIO seqIO; // sequence IO type (e.g. AUDIOAPI_SEQ_IO_BREMEN)
-    ostSeqFlags flags;
-    u8 bankNo;          // The bank number of the streamed track
-    s8 volumeOffset;    // per-track volume offset
-    bool replaced;      // was the replacement successful
-} ostSeqMap;
+    s32 key;                
+    char* files[6];         
+    int numVariants;        // How many variants of music there is (I maybe have added 1 extra to each and now it's just the trend)
+    int currentVariant;     // Variant selected
+    ostStreamKind kind;
+    AudioApiSequenceIO seqIO;
+    u8 bankNo;
+    bool replaced;
+    int lastLoadedVariant;  // No more reloading every scene change (winning)
+} ostSeqMapVar;
+
+static ostSeqMapVar* GetSpecBySeqId(s32 seqId);
 
 
-// Keep only what you want replaced. Examples include your previous picks plus
-// pointer variants that map to their target’s filename.
-static ostSeqMap kSeqs[] = {
-    { NA_BGM_TERMINA_FIELD,            "NA_BGM_TERMINA_FIELD.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_CHASE,                    "NA_BGM_CHASE.ogg",                    STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESTORE, 0, 0, false },
-    { NA_BGM_MAJORAS_THEME,            "NA_BGM_MAJORAS_THEME.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_CLOCK_TOWER,              "NA_BGM_CLOCK_TOWER.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_STONE_TOWER_TEMPLE,       "NA_BGM_STONE_TOWER_TEMPLE.ogg",       STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_INV_STONE_TOWER_TEMPLE,   "NA_BGM_INV_STONE_TOWER_TEMPLE.ogg",   STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_FAILURE_0,                "NA_BGM_FAILURE_0.ogg",                STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_FAILURE_1,                "NA_BGM_FAILURE_1.ogg",                STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_HAPPY_MASK_SALESMAN,      "NA_BGM_HAPPY_MASK_SALESMAN.ogg",      STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_SONG_OF_HEALING,          "NA_BGM_SONG_OF_HEALING.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_SWAMP_REGION,             "NA_BGM_SWAMP_REGION.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_ALIEN_INVASION,           "NA_BGM_ALIEN_INVASION.ogg",           STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_SWAMP_CRUISE,             "NA_BGM_SWAMP_CRUISE.ogg",             STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SHARPS_CURSE,             "NA_BGM_SHARPS_CURSE.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_GREAT_BAY_REGION,         "NA_BGM_GREAT_BAY_REGION.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_IKANA_REGION,             "NA_BGM_IKANA_REGION.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_DEKU_PALACE,              "NA_BGM_DEKU_PALACE.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MOUNTAIN_REGION,          "NA_BGM_MOUNTAIN_REGION.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_PIRATES_FORTRESS,         "NA_BGM_PIRATES_FORTRESS.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_CLOCK_TOWN_DAY_1,         "NA_BGM_CLOCK_TOWN_DAY_1.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_CLOCK_TOWN_DAY_2,         "NA_BGM_CLOCK_TOWN_DAY_2.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_CLOCK_TOWN_DAY_3,         "NA_BGM_CLOCK_TOWN_DAY_3.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_FILE_SELECT,              "NA_BGM_FILE_SELECT.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_SKIP_HARP_INTRO, 0, 0, false },
-    { NA_BGM_CLEAR_EVENT,              "NA_BGM_CLEAR_EVENT.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESUME, 0, 0, false },
-    { NA_BGM_ENEMY,                    "NA_BGM_ENEMY.ogg",                    STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_BOSS,                     "NA_BGM_BOSS.ogg",                     STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESTORE, 0, 0, false },
-    { NA_BGM_WOODFALL_TEMPLE,          "NA_BGM_WOODFALL_TEMPLE.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_OPENING,                  "NA_BGM_OPENING.ogg",                  STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_INSIDE_A_HOUSE,           "NA_BGM_INSIDE_A_HOUSE.ogg",           STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESUME_PREV, 0, 0, false },
-    { NA_BGM_GAME_OVER,                "NA_BGM_GAME_OVER.ogg",                STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_CLEAR_BOSS,               "NA_BGM_CLEAR_BOSS.ogg",               STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_GET_ITEM,                 "NA_BGM_GET_ITEM.ogg",                 STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_GET_HEART,                "NA_BGM_GET_HEART.ogg",                STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_TIMED_MINI_GAME,          "NA_BGM_TIMED_MINI_GAME.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESTORE, 0, 0, false },
-    { NA_BGM_GORON_RACE,               "NA_BGM_GORON_RACE.ogg",               STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MUSIC_BOX_HOUSE,          "NA_BGM_MUSIC_BOX_HOUSE.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_ZELDAS_LULLABY,           "NA_BGM_ZELDAS_LULLABY.ogg",           STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_ROSA_SISTERS,             "NA_BGM_ROSA_SISTERS.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_OPEN_CHEST,               "NA_BGM_OPEN_CHEST.ogg",               STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_MARINE_RESEARCH_LAB,      "NA_BGM_MARINE_RESEARCH_LAB.ogg",      STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_GIANTS_THEME,             "NA_BGM_GIANTS_THEME.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_SKIP_HARP_INTRO, 0, 0, false },
-    { NA_BGM_SONG_OF_STORMS,           "NA_BGM_SONG_OF_STORMS.ogg",           STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_ROMANI_RANCH,             "NA_BGM_ROMANI_RANCH.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_GORON_VILLAGE,            "NA_BGM_GORON_VILLAGE.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MAYORS_OFFICE,            "NA_BGM_MAYORS_OFFICE.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_ZORA_HALL,                "NA_BGM_ZORA_HALL.ogg",                STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESUME, 0, 0, false },
-    { NA_BGM_GET_NEW_MASK,             "NA_BGM_GET_NEW_MASK.ogg",             STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_MINI_BOSS,                "NA_BGM_MINI_BOSS.ogg",                STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESTORE, 0, 0, false },
-    { NA_BGM_GET_SMALL_ITEM,           "NA_BGM_GET_SMALL_ITEM.ogg",           STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_ASTRAL_OBSERVATORY,       "NA_BGM_ASTRAL_OBSERVATORY.ogg",       STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_CAVERN,                   "NA_BGM_CAVERN.ogg",                   STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_MILK_BAR,                 "NA_BGM_MILK_BAR.ogg",                 STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESUME | OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_ZELDA_APPEAR,             "NA_BGM_ZELDA_APPEAR.ogg",             STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SARIAS_SONG,              "NA_BGM_SARIAS_SONG.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_GORON_GOAL,               "NA_BGM_GORON_GOAL.ogg",               STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_HORSE,                    "NA_BGM_HORSE.ogg",                    STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_HORSE_GOAL,               "NA_BGM_HORSE_GOAL.ogg",               STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_INGO,                     "NA_BGM_INGO.ogg",                     STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_KOTAKE_POTION_SHOP,       "NA_BGM_KOTAKE_POTION_SHOP.ogg",       STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_SHOP,                     "NA_BGM_SHOP.ogg",                     STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESUME_PREV, 0, 0, false },
-    { NA_BGM_OWL,                      "NA_BGM_OWL.ogg",                      STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SHOOTING_GALLERY,         "NA_BGM_SHOOTING_GALLERY.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESUME_PREV, 0, 0, false },
-    { NA_BGM_SONATA_OF_AWAKENING,      "NA_BGM_SONATA_OF_AWAKENING.ogg",      STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_GORON_LULLABY,            "NA_BGM_GORON_LULLABY.ogg",            STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_NEW_WAVE_BOSSA_NOVA,      "NA_BGM_NEW_WAVE_BOSSA_NOVA.ogg",      STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_NEW_WAVE_SAXOPHONE,       "NA_BGM_NEW_WAVE_BOSSA_NOVA.ogg",      STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_NEW_WAVE_VOCAL,           "NA_BGM_NEW_WAVE_VOCAL.ogg",           STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_ELEGY_OF_EMPTINESS,       "NA_BGM_ELEGY_OF_EMPTINESS.ogg",       STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_OATH_TO_ORDER,            "NA_BGM_OATH_TO_ORDER.ogg",            STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SWORD_TRAINING_HALL,      "NA_BGM_SWORD_TRAINING_HALL.ogg",      STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_LEARNED_NEW_SONG,         "NA_BGM_LEARNED_NEW_SONG.ogg",         STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_BREMEN_MARCH,             "NA_BGM_BREMEN_MARCH.ogg",             STREAM_FANFARE, AUDIOAPI_SEQ_IO_BREMEN, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_BALLAD_OF_THE_WIND_FISH,  "NA_BGM_BALLAD_OF_THE_WIND_FISH.ogg",  STREAM_FANFARE, AUDIOAPI_SEQ_IO_WINDFISH, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SONG_OF_SOARING,          "NA_BGM_SONG_OF_SOARING.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_RESTORE, 0, 0, false },
-    { NA_BGM_FINAL_HOURS,              "NA_BGM_FINAL_HOURS.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MIKAU_RIFF,               "NA_BGM_MIKAU_RIFF.ogg",               STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_MIKAU_FINALE,             "NA_BGM_MIKAU_FINALE.ogg",             STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_FROG_SONG,                "NA_BGM_FROG_SONG.ogg",                STREAM_BGM,     AUDIOAPI_SEQ_IO_FROG, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_PIANO_SESSION,            "NA_BGM_PIANO_SESSION.ogg",            STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_INDIGO_GO_SESSION,        "NA_BGM_INDIGO_GO_SESSION.ogg",        STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SNOWHEAD_TEMPLE,          "NA_BGM_SNOWHEAD_TEMPLE.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_GREAT_BAY_TEMPLE,         "NA_BGM_GREAT_BAY_TEMPLE.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_MAJORAS_WRATH,            "NA_BGM_MAJORAS_WRATH.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MAJORAS_INCARNATION,      "NA_BGM_MAJORAS_INCARNATION.ogg",      STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MAJORAS_MASK,             "NA_BGM_MAJORAS_MASK.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_BASS_PLAY,                "NA_BGM_BASS_PLAY.ogg",                STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_DRUMS_PLAY,               "NA_BGM_DRUMS_PLAY.ogg",               STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_PIANO_PLAY,               "NA_BGM_PIANO_PLAY.ogg",               STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_IKANA_CASTLE,             "NA_BGM_IKANA_CASTLE.ogg",             STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_ENEMY, 0, 0, false },
-    { NA_BGM_GATHERING_GIANTS,         "NA_BGM_GATHERING_GIANTS.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_KAMARO_DANCE,             "NA_BGM_KAMARO_DANCE.ogg",             STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE_KAMARO, 0, 0, false },
-    { NA_BGM_CREMIA_CARRIAGE,          "NA_BGM_CREMIA_CARRIAGE.ogg",          STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_KEATON_QUIZ,              "NA_BGM_KEATON_QUIZ.ogg",              STREAM_FANFARE, AUDIOAPI_SEQ_IO_KEATON, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_END_CREDITS,              "NA_BGM_END_CREDITS.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_CREDITS_1, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_TITLE_THEME,              "NA_BGM_TITLE_THEME.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_DUNGEON_APPEAR,           "NA_BGM_DUNGEON_APPEAR.ogg",           STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_WOODFALL_CLEAR,           "NA_BGM_WOODFALL_CLEAR.ogg",           STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_SNOWHEAD_CLEAR,           "NA_BGM_SNOWHEAD_CLEAR.ogg",           STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_INTO_THE_MOON,            "NA_BGM_INTO_THE_MOON.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_GOODBYE_GIANT,            "NA_BGM_GOODBYE_GIANT.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_TATL_AND_TAEL,            "NA_BGM_TATL_AND_TAEL.ogg",            STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MOONS_DESTRUCTION,        "NA_BGM_MOONS_DESTRUCTION.ogg",        STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_OCARINA_GUITAR_BASS_SESSION,"NA_BGM_OCARINA_GUITAR_BASS_SESSION.ogg",STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false }, // Not Ocarina
-    { NA_BGM_END_CREDITS_SECOND_HALF,  "NA_BGM_END_CREDITS_SECOND_HALF.ogg",  STREAM_BGM,     AUDIOAPI_SEQ_IO_CREDITS_2, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NB_BGM_MORNING, "NB_BGM_MORNING.ogg", STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
+// A quick "guide" on how variants and the struct works
 
-    // // --- POINTER VARIANTS ---
-    { NA_BGM_CLOCK_TOWN_DAY_2_PTR,     "NA_BGM_CLOCK_TOWN_DAY_2.ogg",         STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_FANFARE, 0, 0, false },
-    { NA_BGM_FAIRY_FOUNTAIN,           "NA_BGM_FAIRY_FOUNTAIN.ogg",           STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MILK_BAR_DUPLICATE,       "NA_BGM_MILK_BAR.ogg",                 STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
-    { NA_BGM_MAJORAS_LAIR,             "NA_BGM_FINAL_HOURS.ogg",              STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, OST_SEQ_FLAGS_NONE, 0, 0, false },
+// {
+//    NA_BGM_FILE_SELECT,               The game sequence that's going to get streamed in
+// 
+// { "NA_BGM_FILE_SELECT.ogg",          This is the basic variant (option 0) this will play by default without any changes
+// 
+//   "NA_BGM_FILE_SELECT_2.ogg",        Variant 1 (option 1)
+// 
+//   "NA_BGM_FILE_SELECT_3.ogg" },      Variant 2 (option 2)
+// 
+// 
+//                                      To change the variants you need to set kSeqs[insert number here (in struct for this it would be 22)].currentVariant = (insert variant number here);
+// 
+//                                      You then need to reload and bind the variant by doing something like LoadAndBindStreamedSequenceVar(&kSeqs[22 (use your number)]);
+// 
+// 
+// 3,                                   This is how many variants you have for this replacement (I keep setting it to one more than I need)
+// 
+// 0,                                   This is the currently select variant (usually changed by code unless done manually in the struct)
+// 
+// STREAM_BGM,                          This is the type of streamed audio used from enum ostStreamKind (fanfare or bgm)
+// 
+// AUDIOAPI_SEQ_IO_NONE,                This controls the special behavior the replacement has, such as dogs following you when you use the bremen mask
+// 
+// 0,                                   This is the sound bank number, used for compatibility
+// 
+// false,                               This checks whether the replacement was successful (I just realized I started these with "this" a whole bunch lol)
+// 
+// -1                                   This variable is used for optimization purposes so it doesn't need to reload it every scene change if it remains the same
+// 
+// },
 
-    // // --- Ocarina Songs ---
-    // { NA_BGM_OCARINA_LULLABY_INTRO_PTR,"NA_BGM_OCARINA_LULLABY_INTRO.ogg",    STREAM_FANFARE, false }, // POINTER!!!
-    // { NA_BGM_OCARINA_LULLABY_INTRO,    "NA_BGM_OCARINA_LULLABY_INTRO.ogg",    STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_EPONA,            "NA_BGM_OCARINA_EPONA.ogg",            STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_SUNS,             "NA_BGM_OCARINA_SUNS.ogg",             STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_TIME,             "NA_BGM_OCARINA_TIME.ogg",             STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_STORM,            "NA_BGM_OCARINA_STORM.ogg",            STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_SONATA,           "NA_BGM_OCARINA_SONATA.ogg",           STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_LULLABY,          "NA_BGM_OCARINA_LULLABY.ogg",          STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_NEW_WAVE,         "NA_BGM_OCARINA_NEW_WAVE.ogg",         STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_ELEGY,            "NA_BGM_OCARINA_ELEGY.ogg",            STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_OATH,             "NA_BGM_OCARINA_OATH.ogg",             STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_SOARING,          "NA_BGM_OCARINA_SOARING.ogg",          STREAM_FANFARE, false },
-    // { NA_BGM_OCARINA_HEALING,          "NA_BGM_OCARINA_HEALING.ogg",          STREAM_FANFARE, false },
-    // { NA_BGM_INVERTED_SONG_OF_TIME,    "NA_BGM_INVERTED_SONG_OF_TIME.ogg",    STREAM_FANFARE, false },
-    // { NA_BGM_SONG_OF_DOUBLE_TIME,      "NA_BGM_SONG_OF_DOUBLE_TIME.ogg",      STREAM_FANFARE, false },
 
-    // // --- ??? ---
-    // { NA_BGM_OPENING_LOOP,             "NA_BGM_OPENING_LOOP.ogg",             STREAM_BGM,     false },
-    // { NA_BGM_SEQ_122,                  "NA_BGM_SEQ_122.ogg",                  STREAM_BGM,     false },
+// The Big Music Struct 
+// (Add or remove variants here, or rename audio files if you don't like the names used)
+
+static ostSeqMapVar kSeqs[] = {
+    { NA_BGM_TERMINA_FIELD,              { "NA_BGM_TERMINA_FIELD.ogg",
+                                           "NA_BGM_TERMINA_FIELD_SWORD.ogg", 
+                                           "NA_BGM_TERMINA_FIELD_SWORD_SLOW.ogg"},               3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CHASE,                      { "NA_BGM_CHASE.ogg" },                                 1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MAJORAS_THEME,              { "NA_BGM_MAJORAS_THEME.ogg",
+                                           "NA_BGM_MAJORAS_THEME_ROOF.ogg" },                    2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLOCK_TOWER,                { "NA_BGM_CLOCK_TOWER.ogg" },                           1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_STONE_TOWER_TEMPLE,         { "NA_BGM_STONE_TOWER_TEMPLE.ogg" },                    1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_INV_STONE_TOWER_TEMPLE,     { "NA_BGM_INV_STONE_TOWER_TEMPLE.ogg" },                1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_FAILURE_0,                  { "NA_BGM_FAILURE_1.ogg",
+                                           "KNIGHT_ROAR.ogg" },                                  2, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_FAILURE_1,                  { "NA_BGM_FAILURE_1.ogg" },                             1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_HAPPY_MASK_SALESMAN,        { "NA_BGM_HAPPY_MASK_SALESMAN.ogg" },                   1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SONG_OF_HEALING,            { "NA_BGM_SONG_OF_HEALING.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SWAMP_REGION,               { "NA_BGM_SWAMP_REGION.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ALIEN_INVASION,             { "NA_BGM_ALIEN_INVASION.ogg",
+                                           "NA_BGM_ALIEN_SCENE.ogg" },                           2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SWAMP_CRUISE,               { "NA_BGM_SWAMP_CRUISE.ogg",
+                                           "NA_BGM_SWAMP_CRUISE_ALT.ogg" },                      2, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SHARPS_CURSE,               { "NA_BGM_SHARPS_CURSE.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GREAT_BAY_REGION,           { "NA_BGM_GREAT_BAY_REGION.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_IKANA_REGION,               { "NA_BGM_IKANA_REGION.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_DEKU_PALACE,                { "NA_BGM_DEKU_PALACE.ogg" },                           1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MOUNTAIN_REGION,            { "NA_BGM_MOUNTAIN_REGION.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_PIRATES_FORTRESS,           { "NA_BGM_PIRATES_FORTRESS.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLOCK_TOWN_DAY_1,           { "NA_BGM_CLOCK_TOWN_DAY_1.ogg",
+                                           "NA_BGM_CLOCK_TOWN_DAY_4.ogg" },                      2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLOCK_TOWN_DAY_2,           { "NA_BGM_CLOCK_TOWN_DAY_2.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLOCK_TOWN_DAY_3,           { "NA_BGM_CLOCK_TOWN_DAY_3.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_FILE_SELECT,                { "NA_BGM_FILE_SELECT.ogg",
+                                           "NA_BGM_FILE_SELECT_2.ogg",
+                                           "NA_BGM_FILE_SELECT_3.ogg" },                         3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLEAR_EVENT,                { "NA_BGM_CLEAR_EVENT.ogg" },                           1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ENEMY,                      { "NA_BGM_ENEMY.ogg",
+                                           "NA_BGM_ENEMY_2.ogg", 
+                                           "NA_BGM_ENEMY_3.ogg",
+                                           "NA_BGM_CHASE.ogg"},                               4, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_BOSS,                       { "NA_BGM_BOSS.ogg",
+                                           "NA_BGM_BOSS_2.ogg",
+                                           "NA_BGM_BOSS_3.ogg",
+                                           "NA_BGM_BOSS_4.ogg" },                                4, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_WOODFALL_TEMPLE,            { "NA_BGM_WOODFALL_TEMPLE.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_OPENING,                    { "NA_BGM_OPENING.ogg" },                               1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_INSIDE_A_HOUSE,             { "NA_BGM_INSIDE_A_HOUSE.ogg" },                        1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GAME_OVER,                  { "NA_BGM_GAME_OVER.ogg",
+                                           "NA_BGM_SWOON.ogg" },                                 2, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLEAR_BOSS,                 { "NA_BGM_CLEAR_BOSS.ogg" },                            1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GET_ITEM,                   { "NA_BGM_GET_ITEM.ogg"},                               1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GET_HEART,                  { "NA_BGM_GET_HEART.ogg",
+                                           "KNIGHT_WIND.ogg"},                                   2, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_TIMED_MINI_GAME,            { "NA_BGM_TIMED_MINI_GAME.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GORON_RACE,                 { "NA_BGM_GORON_RACE.ogg" },                            1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MUSIC_BOX_HOUSE,            { "NA_BGM_MUSIC_BOX_HOUSE.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ZELDAS_LULLABY,             { "NA_BGM_ZELDAS_LULLABY.ogg" },                        1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ROSA_SISTERS,               { "NA_BGM_ROSA_SISTERS.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_OPEN_CHEST,                 { "NA_BGM_OPEN_CHEST.ogg" },                            1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MARINE_RESEARCH_LAB,        { "NA_BGM_MARINE_RESEARCH_LAB.ogg",
+                                           "NA_BGM_MARINE_RESEARCH_LAB_2.ogg" },                 1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GIANTS_THEME,               { "NA_BGM_GIANTS_THEME.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SONG_OF_STORMS,             { "NA_BGM_SONG_OF_STORMS.ogg" },                        1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ROMANI_RANCH,               { "NA_BGM_ROMANI_RANCH.ogg",
+                                           "NA_BGM_ROMANI_RANCH_ALT.ogg" },                      2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GORON_VILLAGE,              { "NA_BGM_GORON_VILLAGE.ogg" },                         1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MAYORS_OFFICE,              { "NA_BGM_MAYORS_OFFICE.ogg" },                         1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ZORA_HALL,                  { "NA_BGM_ZORA_HALL.ogg",
+                                           "NA_BGM_ZORA_HALL_ALT.ogg" },                         2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GET_NEW_MASK,               { "NA_BGM_GET_NEW_MASK.ogg" },                          1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MINI_BOSS,                  { "NA_BGM_MINI_BOSS.ogg", 
+                                           "NA_BGM_MINI_BOSS_2.ogg",
+                                           "NA_BGM_ENEMY_3.ogg",
+                                           "NA_BGM_MINI_BOSS_ROOF.ogg",
+                                           "NA_BGM_MINI_BOSS_BK.ogg", 
+                                           "NA_BGM_MBHCLOSET.ogg" },                             5, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GET_SMALL_ITEM,             { "NA_BGM_GET_SMALL_ITEM.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ASTRAL_OBSERVATORY,         { "NA_BGM_ASTRAL_OBSERVATORY.ogg" },                    1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CAVERN,                     { "NA_BGM_CAVERN.ogg",
+                                           "NA_BGM_CAVERN_2.ogg",
+                                           "NA_BGM_CAVERN_3.ogg"},                               2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MILK_BAR,                   { "NA_BGM_MILK_BAR.ogg" },                              1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ZELDA_APPEAR,               { "NA_BGM_ZELDA_APPEAR.ogg" },                          1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SARIAS_SONG,                { "NA_BGM_SARIAS_SONG.ogg" },                           1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GORON_GOAL,                 { "NA_BGM_GORON_GOAL.ogg" },                            1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_HORSE,                      { "NA_BGM_HORSE.ogg" },                                 1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_HORSE_GOAL,                 { "NA_BGM_HORSE_GOAL.ogg" },                            1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_INGO,                       { "NA_BGM_INGO.ogg" },                                  1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_KOTAKE_POTION_SHOP,         { "NA_BGM_KOTAKE_POTION_SHOP.ogg" },                    1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SHOP,                       { "NA_BGM_SHOP.ogg",
+                                           "NA_BGM_SHOP_2.ogg",
+                                           "NA_BGM_SHOP_3.ogg"},                                 3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_OWL,                        { "NA_BGM_OWL.ogg" },                                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SHOOTING_GALLERY,           { "NA_BGM_SHOOTING_GALLERY.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SONATA_OF_AWAKENING,        { "NA_BGM_SONATA_OF_AWAKENING.ogg" },                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GORON_LULLABY,              { "NA_BGM_GORON_LULLABY.ogg" },                         1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_NEW_WAVE_BOSSA_NOVA,        { "NA_BGM_NEW_WAVE_BOSSA_NOVA.ogg" },                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_NEW_WAVE_SAXOPHONE,         { "NA_BGM_NEW_WAVE_BOSSA_NOVA.ogg" },                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_NEW_WAVE_VOCAL,             { "NA_BGM_NEW_WAVE_VOCAL.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ELEGY_OF_EMPTINESS,         { "NA_BGM_ELEGY_OF_EMPTINESS.ogg" },                    1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_OATH_TO_ORDER,              { "NA_BGM_OATH_TO_ORDER.ogg" },                         1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SWORD_TRAINING_HALL,        { "NA_BGM_SWORD_TRAINING_HALL.ogg" },                   1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_LEARNED_NEW_SONG,           { "NA_BGM_LEARNED_NEW_SONG.ogg" },                      1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_BREMEN_MARCH,               { "NA_BGM_BREMEN_MARCH.ogg" },                          1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_BREMEN, 0, false, -1 },
+    { NA_BGM_BALLAD_OF_THE_WIND_FISH,    { "NA_BGM_BALLAD_OF_THE_WIND_FISH.ogg" },               1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_WINDFISH, 0, false, -1 },
+    { NA_BGM_SONG_OF_SOARING,            { "NA_BGM_SONG_OF_SOARING.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_FINAL_HOURS,                { "NA_BGM_FINAL_HOURS.ogg",
+                                           "NA_BGM_MAJORA.ogg" },                                2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MIKAU_RIFF,                 { "NA_BGM_MIKAU_RIFF.ogg" },                            1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MIKAU_FINALE,               { "NA_BGM_MIKAU_FINALE.ogg" },                          1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_FROG_SONG,                  { "NA_BGM_FROG_SONG.ogg" },                             1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_FROG, 0, false, -1 },
+    { NA_BGM_PIANO_SESSION,              { "NA_BGM_PIANO_SESSION.ogg" },                         1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_INDIGO_GO_SESSION,          { "NA_BGM_INDIGO_GO_SESSION.ogg" },                     1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SNOWHEAD_TEMPLE,            { "NA_BGM_SNOWHEAD_TEMPLE.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GREAT_BAY_TEMPLE,           { "NA_BGM_GREAT_BAY_TEMPLE.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MAJORAS_WRATH,              { "NA_BGM_MAJORAS_WRATH.ogg" },                         1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MAJORAS_INCARNATION,        { "NA_BGM_MAJORAS_INCARNATION.ogg" },                   1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MAJORAS_MASK,               { "NA_BGM_MAJORAS_MASK.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_BASS_PLAY,                  { "NA_BGM_BASS_PLAY.ogg" },                             1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_DRUMS_PLAY,                 { "NA_BGM_DRUMS_PLAY.ogg" },                            1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_PIANO_PLAY,                 { "NA_BGM_PIANO_PLAY.ogg" },                            1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_IKANA_CASTLE,               { "NA_BGM_IKANA_CASTLE.ogg" },                          1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GATHERING_GIANTS,           { "NA_BGM_GATHERING_GIANTS.ogg" },                      1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_KAMARO_DANCE,               { "NA_BGM_KAMARO_DANCE.ogg" },                          1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CREMIA_CARRIAGE,            { "NA_BGM_CREMIA_CARRIAGE.ogg" },                       1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_KEATON_QUIZ,                { "NA_BGM_KEATON_QUIZ.ogg" },                           1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_END_CREDITS,                { "NA_BGM_END_CREDITS.ogg" },                           1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_CREDITS_1, 0, false, -1 },
+    { NA_BGM_TITLE_THEME,                { "NA_BGM_TITLE_THEME.ogg" },                           1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_DUNGEON_APPEAR,             { "NA_BGM_DUNGEON_APPEAR.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_WOODFALL_CLEAR,             { "NA_BGM_WOODFALL_CLEAR.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SNOWHEAD_CLEAR,             { "NA_BGM_SNOWHEAD_CLEAR.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_INTO_THE_MOON,              { "NA_BGM_INTO_THE_MOON.ogg" },                         1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_GOODBYE_GIANT,              { "NA_BGM_GOODBYE_GIANT.ogg" },                         1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_TATL_AND_TAEL,              { "NA_BGM_TATL_AND_TAEL.ogg" },                         1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MOONS_DESTRUCTION,          { "NA_BGM_MOONS_DESTRUCTION.ogg" },                     1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_OCARINA_GUITAR_BASS_SESSION,{ "NA_BGM_OCARINA_GUITAR_BASS_SESSION.ogg" },           1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_END_CREDITS_SECOND_HALF,    { "NA_BGM_END_CREDITS_SECOND_HALF.ogg" },               1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_CREDITS_2, 0, false, -1 },
+    { NB_BGM_MORNING,                    { "NB_BGM_MORNING.ogg" },                               1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+
+    { NA_BGM_CLOCK_TOWN_DAY_2_PTR,       {"NA_BGM_CLOCK_TOWN_DAY_2.ogg"},                        1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_FAIRY_FOUNTAIN,             {"NA_BGM_FAIRY_FOUNTAIN.ogg"},                          1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MILK_BAR_DUPLICATE,         {"NA_BGM_MILK_BAR.ogg" },                               1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_MAJORAS_LAIR,               {"NA_BGM_MAJORA.ogg" },                                 1, 0, STREAM_BGM, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+
 };
 
-// [BENS-STREAMED-AUDIO CONFIG END]
-// -----------------------------------------------------------------------------
+// It loads and binds the streamed audio, that's all I really have to say
 
-static void LoadAndBindStreamedSequence(ostSeqMap* spec) {
+static void LoadAndBindStreamedSequenceVar(ostSeqMapVar* spec) {
+
+    if (spec->currentVariant == spec->lastLoadedVariant) {
+        return;
+    }
+
+    char* fileToLoad = spec->files[spec->currentVariant];
     s32 seqId;
-    AudioApiFileInfo2 info2 = { 0 };
-    static unsigned char* modPath = NULL;
 
-    if (modPath == NULL) {
-        modPath = recomp_get_mod_file_path();
+    switch (spec->kind) {
+    case STREAM_BGM:
+        seqId = AudioApi_CreateStreamedBgm(NULL, (char*)modPath, fileToLoad, spec->seqIO);
+        spec->bankNo = AudioApi_GetSequenceFont(seqId, 0);
+        break;
+    case STREAM_FANFARE:
+        seqId = AudioApi_CreateStreamedFanfare(NULL, (char*)modPath, fileToLoad, spec->seqIO);
+        spec->bankNo = AudioApi_GetSequenceFont(seqId, 0);
+        break;
+    default:
+        return;
     }
 
-    info2.volumeOffset = spec->volumeOffset;
-
-    if (spec->kind == STREAM_FANFARE) {
-        seqId = AudioApi_CreateStreamedFanfareEx(&info2, (char*)modPath, spec->file, spec->seqIO);
-        spec->bankNo = AudioApi_GetSequenceFont(seqId, 0);
-    } else {
-        seqId = AudioApi_CreateStreamedBgmEx(&info2, (char*)modPath, spec->file, spec->seqIO);
-        spec->bankNo = AudioApi_GetSequenceFont(seqId, 0);
-    }
-    
     if (seqId >= 0) {
-        u8 seqFlags = (u8)spec->flags;
-
-        AudioApi_SetSequenceFlags(seqId, seqFlags);
         AudioApi_ReplaceSequence(spec->key, &gAudioCtx.sequenceTable->entries[seqId]);
         AudioApi_ReplaceSequenceFont(spec->key, 0, spec->bankNo);
-        AudioApi_SetSequenceFlags(spec->key, seqFlags);
         spec->replaced = true;
+        spec->lastLoadedVariant = spec->currentVariant;
     }
 }
 
+// This was originally just for the boss music hence the name "UpdateBossMusicByScene" but now it just handles most of the variant switching and I don't feel like changing the name
 
-static ostSeqMap* GetSpecBySeqId(s32 seqId) {
+static void UpdateBossMusicByScene(PlayState* play) {
+    s32 scene = play->sceneId;
+    s32 room = play->roomCtx.curRoom.num;
+    Player* player = GET_PLAYER(play);
+
+    if (!play) return; // for some reason this would return rarely false and crash the game???
+    if (play->roomCtx.curRoom.segment == NULL) return;
+    if (play->sceneId < 0) return;
+
+    // This changes the theme of Romani Ranch depending on if Romani and the cows were captured
+    if (CURRENT_DAY > 1) {
+
+        if (!CHECK_WEEKEVENTREG(WEEKEVENTREG_DEFENDED_AGAINST_ALIENS)) {
+
+            kSeqs[42].currentVariant = 1;
+        }
+        else {
+
+            kSeqs[42].currentVariant = 0;
+        }
+    }
+    else {
+
+        kSeqs[42].currentVariant = 0;
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[42]);
+
+    // This controls the clock town theme for Day 4 & the shop theme day variants
+    if (CURRENT_DAY < 4) {
+
+        // We love day 0 crash preventions
+        int day = CURRENT_DAY;
+        if (day < 1) day = 1;
+
+        kSeqs[59].currentVariant = day - 1;
+        kSeqs[19].currentVariant = 0;
+
+    }
+    else {
+
+        kSeqs[59].currentVariant = 0;
+        kSeqs[19].currentVariant = 1;
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[59]);
+    LoadAndBindStreamedSequenceVar(&kSeqs[19]);
+
+    // Controls the swamp cruise theme
+    if (CURRENT_DAY == 3) {
+
+        kSeqs[12].currentVariant = 1;
+
+    }
+    else {
+
+        kSeqs[12].currentVariant = 0;
+
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[12]);
+
+    if (gSaveContext.save.isNight == false) {
+
+        kSeqs[11].currentVariant = 1;
+
+    }
+    else {
+
+        kSeqs[11].currentVariant = 0;
+
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[11]);
+
+    if (scene == SCENE_OKUJOU) {
+
+        if (pendingSwoon) {
+
+            kSeqs[29].currentVariant = 1;
+
+        }
+        LoadAndBindStreamedSequenceVar(&kSeqs[29]);
+
+    }
+
+    // Anti Spam(ton) (runs once per room and scene)
+    // This is below the checks above because they need to be able to change without a scene change, if they were below in order for the audio to update you'd need to leave and return to the scene
+
+    if (scene == lastScene && room == lastRoom) {
+        return;
+    }
+
+    if (scene == SCENE_LAST_BS) {
+
+        kSeqs[74].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[74]);
+
+    }
+    else {
+
+        kSeqs[74].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[74]);
+    }
+
+    lastScene = scene;
+    lastRoom = room;
+
+    // Progression Battle Music
+    // This works by checking the remains and if you have 2 or more it will use the second variant or if you're in sakon's hideout
+
+    s32 remains = 0;
+    if (CHECK_QUEST_ITEM(QUEST_REMAINS_ODOLWA))   remains++;
+    if (CHECK_QUEST_ITEM(QUEST_REMAINS_GOHT))     remains++;
+    if (CHECK_QUEST_ITEM(QUEST_REMAINS_GYORG))    remains++;
+    if (CHECK_QUEST_ITEM(QUEST_REMAINS_TWINMOLD)) remains++;
+
+    if (scene != SCENE_SECOM) {
+
+        if (remains >= 2) {
+            kSeqs[24].currentVariant = 1;
+        }
+        else {
+            kSeqs[24].currentVariant = 0;
+        }
+    }
+    else {
+
+        kSeqs[24].currentVariant = 3;
+
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[24]);
+
+    // Termina Field Themes (based on your current sword)
+
+    if (player->transformation == PLAYER_FORM_HUMAN) {
+
+        if (CUR_FORM_EQUIP(EQUIP_SLOT_B) == ITEM_SWORD_RAZOR) {
+
+            kSeqs[0].currentVariant = 1;
+            SwordValue = 1;
+
+        }
+        else {
+
+            if (CUR_FORM_EQUIP(EQUIP_SLOT_B) == ITEM_SWORD_GILDED) {
+
+                kSeqs[0].currentVariant = 2;
+                SwordValue = 2;
+
+            }
+            else {
+
+                kSeqs[0].currentVariant = 0;
+                SwordValue = 0;
+            }
+        }
+    }
+    else {
+
+        kSeqs[0].currentVariant = SwordValue;
+
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[0]);
+
+    // Room & Scene Specific Changes (add or remove for scene specific changes) (that's a lot of cases)
+
+    switch (scene) {
+    case SCENE_MITURIN_BS:      // Odolwa
+        kSeqs[25].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[25]);
+        break;
+
+    case SCENE_HAKUGIN_BS:      // Goht
+        kSeqs[25].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[25]);
+        break;
+
+    case SCENE_SEA_BS:          // Gyorg
+        kSeqs[25].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[25]);
+        break;
+
+    case SCENE_INISIE_BS:       // Twinmold
+        kSeqs[25].currentVariant = 3;
+        LoadAndBindStreamedSequenceVar(&kSeqs[25]);
+        break;
+
+    case SCENE_KAKUSIANA:       // Grotto
+        if (room == 12) {
+            kSeqs[50].currentVariant = 1;
+        }
+        else {
+            kSeqs[50].currentVariant = 0;
+        }
+        LoadAndBindStreamedSequenceVar(&kSeqs[50]);
+        break;
+
+        // Not moved above scene check since it breaks when the day transition occurs for whatever reason
+    case SCENE_33ZORACITY:       // Zora Hall
+        if (CURRENT_DAY == 3) {
+            kSeqs[45].currentVariant = 1;
+        }
+        else {
+            kSeqs[45].currentVariant = 0;
+        }
+        LoadAndBindStreamedSequenceVar(&kSeqs[45]);
+        break;
+
+    case SCENE_SEA:       // GBT
+        kSeqs[47].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    case SCENE_INISIE_N:       // STT
+        kSeqs[47].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    case SCENE_INISIE_R:       // ISTT Gomess
+        if (room == 11) {
+            kSeqs[47].currentVariant = 2;
+        }
+        else {
+            kSeqs[47].currentVariant = 1;
+        }
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    case SCENE_LAST_LINK:       // Moon
+        kSeqs[47].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    case SCENE_OKUJOU:       // CTR
+        kSeqs[47].currentVariant = 4;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        kSeqs[6].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[6]);
+        kSeqs[32].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[32]);
+
+        if (remains == 4) { // Remains check for alternate tracks
+
+            kSeqs[2].currentVariant = 1;
+            LoadAndBindStreamedSequenceVar(&kSeqs[2]);
+            kSeqs[47].currentVariant = 3;
+            LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        }
+        break;
+
+    case SCENE_TOUGITES:       // Spirit House
+        kSeqs[47].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        kSeqs[39].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[39]);
+        break;
+
+    case SCENE_RANDOM:       // Secret Shrine
+        kSeqs[47].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        kSeqs[50].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[50]);
+        break;
+
+    case SCENE_REDEAD:       // BOTW (not the game)
+        kSeqs[50].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[50]);
+        break;
+
+    case SCENE_MUSICHOUSE:   // Music Box House
+        kSeqs[47].currentVariant = 5;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    default:
+        kSeqs[47].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        kSeqs[39].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[39]);
+        kSeqs[2].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[2]);
+        kSeqs[6].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[6]);
+        kSeqs[32].currentVariant = 0;
+        LoadAndBindStreamedSequenceVar(&kSeqs[32]);
+        break;
+    }
+    // I wasn't kidding about all the cases
+}
+
+// Title Screen Progression
+// This checks the remains once again, but this time it checks the save files and gets the one with the furthest progress
+// The way it works is if you have 0 remains it plays variant 0, if you have 1 it plays 1, and if you have them all it plays 2 (you could do one for each or check something else)
+
+static void UpdateFileSelectMusic(FileSelectState* fileSelect) {
+    s32 fsVariant = 0;
+    s32 slotVariants[2] = { 0, 0 };
+
+    
+    const QuestItem remainsEnum[] = {
+        QUEST_REMAINS_ODOLWA,
+        QUEST_REMAINS_GOHT,
+        QUEST_REMAINS_GYORG,
+        QUEST_REMAINS_TWINMOLD
+    };
+
+    for (s32 slot = 0; slot < 2; slot++) {
+        u16 questItems = fileSelect->questItems[slot];
+        s32 remains = 0;
+
+        for (s32 i = 0; i < 4; i++) {
+            if (questItems & (1 << remainsEnum[i])) {
+                remains++;
+            }
+        }
+
+        if (remains == 4) slotVariants[slot] = 2;
+        else if (remains > 0) slotVariants[slot] = 1;
+        else slotVariants[slot] = 0;
+    }
+
+    fsVariant = slotVariants[0] > slotVariants[1] ? slotVariants[0] : slotVariants[1];
+
+    if (kSeqs[22].currentVariant != fsVariant) {
+        kSeqs[22].currentVariant = fsVariant;
+        LoadAndBindStreamedSequenceVar(&kSeqs[22]);
+    }
+}
+
+// Update Game
+
+RECOMP_HOOK("Play_Update") void OnPlayUpdate(PlayState* play) {
+
+    UpdateBossMusicByScene(play);
+
+    // Swoon
+
+    if (pendingSwoon && play->msgCtx.msgMode == MSGMODE_NONE) {
+
+        gSaveContext.save.saveInfo.playerData.health = 0;
+        Play_EnableMotionBlur(230);
+        gPlayVisMonoColor.r = 255;
+        gPlayVisMonoColor.g = 255;
+        gPlayVisMonoColor.b = 255;
+        gPlayVisMonoColor.a = 255;
+
+    }
+}
+
+// Update File Select
+
+RECOMP_HOOK("FileSelect_UpdateAndDrawSkybox") void OnFileUpdate( FileSelectState* fileSelect) {
+
+    UpdateFileSelectMusic(fileSelect);
+}
+
+
+static ostSeqMapVar* GetSpecBySeqId(s32 seqId) {
     int i;
-
     for (i = 0; i < ARRAY_COUNT(kSeqs); ++i) {
         if (kSeqs[i].replaced && kSeqs[i].key == seqId) {
             return &kSeqs[i];
         }
     }
-
     return NULL;
 }
 
 RECOMP_CALLBACK("magemods_audio_api", AudioApi_Init) void onAudioApiInit() {
-    int i;
 
+    if (modPath == NULL) {
+        modPath = (const char*)recomp_get_mod_file_path();
+
+        if (modPath == NULL) {
+            modPath = "";
+        }
+    }
+
+    int i;
     for (i = 0; i < ARRAY_COUNT(kSeqs); ++i) {
-        LoadAndBindStreamedSequence(&kSeqs[i]);
+        LoadAndBindStreamedSequenceVar(&kSeqs[i]);
     }
 
     for (i = 0; i < CROSSFADE_DURATION_TICKS; i++) {
         fadeInCurve[i] = Math_SinF((f32)i / CROSSFADE_DURATION_TICKS * M_PI * 0.5f);
         fadeOutCurve[i] = Math_CosF((f32)i / CROSSFADE_DURATION_TICKS * M_PI * 0.5f);
     }
-
-    // Set defaults from config on first load
-    unsigned long volIdx = recomp_get_config_u32("remaster_volume");
-    if (volIdx >= ARRAY_COUNT(kRemasterVolumeTable)) {
-        volIdx = 1;
-    }
-    remasterVolumeMax = kRemasterVolumeTable[volIdx];
-
-    activeChannel = (recomp_get_config_u32("default_soundtrack") != 0)
-        ? OST_CHANNEL
-        : REMASTER_CHANNEL;
-
-    enemyBlendAmount = 0.0f;
-    subBlendAmount = 0.0f;
 }
 
-bool disableSwitchingOnCurrentTrack[SEQ_PLAYER_MAX];
-
-RECOMP_EXPORT void BensSoundtrack_SetDisableChannelSwitching(int playerIndex, bool shouldDisable)
-{
-    disableSwitchingOnCurrentTrack[playerIndex] = shouldDisable;
-    return;
-}
-
-RECOMP_EXPORT u8 BensSoundtrack_GetOriginalBankIdx(int seqId)
-{
-    ostSeqMap* spec = GetSpecBySeqId(seqId);
-
-    return spec ? spec->bankNo : 0;
-}
-
-static void ApplyDefaultSoundtrackConfig(void) {
-    // Remaster volume: 0 = "-3 dB", 1 = "0 dB", 2 = "+3 dB"
-    unsigned long volIdx = recomp_get_config_u32("remaster_volume");
-    if (volIdx >= ARRAY_COUNT(kRemasterVolumeTable)) {
-        volIdx = 1; // fallback to 0 dB
-    }
-    remasterVolumeMax = kRemasterVolumeTable[volIdx];
-
-    // Reset to default on scene change: 0 = "Off", 1 = "On"
-    if (recomp_get_config_u32("reset_on_scene_change") == 0) {
-        return;
-    }
-
-    int configChannel = (recomp_get_config_u32("default_soundtrack") != 0)
-        ? OST_CHANNEL
-        : REMASTER_CHANNEL;
-
-    if (activeChannel != configChannel) {
-        activeChannel = configChannel;
-        fadeTimer = CROSSFADE_DURATION_TICKS;
-
-        if (activeChannel == REMASTER_CHANNEL) {
-            Notifications_Emit("Ben's RST", "Active:", "REMASTER");
-        } else {
-            Notifications_Emit("Ben's RST", "Active:", "CD OST");
-        }
-    }
-}
-
-RECOMP_HOOK("Play_Init") void onPlayInit(GameState* gameState) {
-    ApplyDefaultSoundtrackConfig();
-}
 
 RECOMP_HOOK("AudioScript_ProcessSequences") void onProcessSequences() {
     f32 fadeIn, fadeOut;
@@ -335,157 +680,245 @@ RECOMP_HOOK("AudioScript_ProcessSequences") void onProcessSequences() {
         fadeIn = fadeInCurve[CROSSFADE_DURATION_TICKS - fadeTimer];
         fadeOut = fadeOutCurve[CROSSFADE_DURATION_TICKS - fadeTimer];
         fadeTimer--;
-    } else {
+    }
+    else {
         fadeIn = 1.0f;
         fadeOut = 0.0f;
     }
 
     if (activeChannel == REMASTER_CHANNEL) {
-        remasterVolumeUnducked = fadeIn * remasterVolumeMax;
-        ostVolumeUnducked = fadeOut * OST_VOLUME;
-        remasterVolumeSub = remasterVolumeMax;
-        ostVolumeSub = 0.0f;
-    } else {
-        remasterVolumeUnducked = fadeOut * remasterVolumeMax;
-        ostVolumeUnducked = fadeIn * OST_VOLUME;
-        remasterVolumeSub = 0.0f;
-        ostVolumeSub = OST_VOLUME;
+        remasterVolume = fadeIn * REMASTER_VOLUME;
+        ostVolume = fadeOut * OST_VOLUME;
     }
-
-    // Treat enemy and non-enemy sub-BGM blend intents with independent curves.
-    // Enemy blend ducks a bit more aggressively than ambient/spatial sub-BGM.
-    f32 enemyDuck = 1.0f - (enemyBlendAmount * enemyBlendAmount) * 0.20f;
-    f32 subDuck = 1.0f - subBlendAmount * 0.12f;
-    f32 bgmDuck = CLAMP(enemyDuck * subDuck, 0.0f, 1.0f);
-
-    remasterVolume = remasterVolumeUnducked * bgmDuck;
-    ostVolume = ostVolumeUnducked * bgmDuck;
-
-    // Keep both BGM players fully unmasked for interleaved multi-track mixes.
-    ResetBgmChannelDisableMasks();
-}
-
-RECOMP_CALLBACK("magemods_audio_api", AudioApi_EnemyBgmSplit) void onEnemyBgmSplit(s8 volumeSplit) {
-    enemyBlendAmount = CLAMP((f32)volumeSplit / 127.0f, 0.0f, 1.0f);
-    subBlendAmount = 0.0f;
-    ResetBgmChannelDisableMasks();
-}
-
-RECOMP_CALLBACK("magemods_audio_api", AudioApi_SubBgmBlend) void onSubBgmBlend(s8 volumeSplit) {
-    subBlendAmount = CLAMP((f32)volumeSplit / 127.0f, 0.0f, 1.0f);
-    if (subBlendAmount > 0.0f) {
-        enemyBlendAmount = 0.0f;
+    else {
+        activeChannel = REMASTER_CHANNEL;
     }
-    ResetBgmChannelDisableMasks();
 }
 
-RECOMP_CALLBACK("magemods_audio_api", AudioApi_BgmBlendIntent) void onBgmBlendIntent(AudioApiBgmBlendSource source, s8 volumeSplit) {
-    f32 amount = CLAMP((f32)volumeSplit / 127.0f, 0.0f, 1.0f);
-
-    switch (source) {
-        case AUDIOAPI_BGM_BLEND_SOURCE_ENEMY:
-            enemyBlendAmount = amount;
-            if (amount > 0.0f) {
-                subBlendAmount = 0.0f;
-            }
-            break;
-
-        case AUDIOAPI_BGM_BLEND_SOURCE_SUB_SPATIAL:
-        case AUDIOAPI_BGM_BLEND_SOURCE_SUB_NONSPATIAL:
-            subBlendAmount = amount;
-            if (amount > 0.0f) {
-                enemyBlendAmount = 0.0f;
-            }
-            break;
-    }
-
-    ResetBgmChannelDisableMasks();
-}
 
 RECOMP_HOOK("AudioScript_SequencePlayerProcessSound") void onSequencePlayerProcessSound(SequencePlayer* seqPlayer) {
-    if (disableSwitchingOnCurrentTrack[seqPlayer->playerIndex]) { return; }
-
     s32 seqId;
-    ostSeqMap* spec;
+    ostSeqMapVar* spec;
     SequenceChannel* channel;
-    SequenceLayer* layer0;
-    SequenceLayer* layer1;
     f32 volume;
-    bool enforceStereoLayout;
-    s32 desiredPan;
     int i;
 
     seqId = AudioApi_GetSeqPlayerSeqId(seqPlayer);
     spec = GetSpecBySeqId(seqId);
-    enforceStereoLayout = (seqId >= 0) && ((AudioApi_GetSequenceFlags(seqId) & SEQ_FLAG_ENEMY) != 0);
+
+    if (disableSwitchingOnCurrentTrack[seqPlayer->playerIndex]) { return; }
 
     if (spec) {
         for (i = 0; i < ARRAY_COUNT(seqPlayer->channels); i++) {
             channel = seqPlayer->channels[i];
-            if (channel == NULL) {
-                continue;
-            }
+            if (!channel) continue;
 
-            // One channel per audio track: channels are laid out as stereo pairs.
-            // Pair 0 (ch 0/1) = remaster, pair 1 (ch 2/3) = OST, alternating thereafter.
-            volume = (((i / 2) % 2) == REMASTER_CHANNEL)
-                ? remasterVolumeSub
-                : ostVolumeSub;
-
-            if (seqPlayer->playerIndex == SEQ_PLAYER_BGM_MAIN) {
-                volume = (((i / 2) % 2) == REMASTER_CHANNEL)
-                    ? remasterVolume
-                    : ostVolume;
-            }
+            volume = remasterVolume;
 
             if (channel->volume != volume) {
                 channel->volume = volume;
                 channel->changes.s.volume = true;
             }
-
-            if (!enforceStereoLayout) {
-                continue;
-            }
-
-            channel->muted = false;
-
-            layer0 = channel->layers[0];
-            layer1 = channel->layers[1];
-
-            if (layer0 != NULL && layer1 != NULL && layer0 != NO_LAYER && layer1 != NO_LAYER) {
-                channel->pan = 64;
-                channel->newPan = 64;
-                channel->panChannelWeight = 0;
-                channel->changes.s.pan = true;
-
-                layer0->notePan = 0;
-                layer0->pan = 0;
-                layer1->notePan = 127;
-                layer1->pan = 127;
-            } else {
-                desiredPan = (i % 2) == 0 ? 0 : 127;
-                channel->pan = desiredPan;
-                channel->newPan = desiredPan;
-                channel->panChannelWeight = 127;
-                channel->changes.s.pan = true;
-            }
         }
     }
-
 }
 
-RECOMP_HOOK("Graph_ExecuteAndDraw") void onGraphExecuteAndDraw(GraphicsContext* gfxCtx, GameState* gameState) {
-    // Quick switch with L: 0 = "On", 1 = "Off"
-    if (recomp_get_config_u32("quick_switch_l") == 0 && 
-        CHECK_BTN_ALL(CONTROLLER1(gameState)->press.button, BTN_L)) {
-        activeChannel = (activeChannel + 1) % 2;
-        fadeTimer = CROSSFADE_DURATION_TICKS;
+// This controls what variant plays
 
-        if (activeChannel == REMASTER_CHANNEL) {
-            Notifications_Emit("Ben's RST", "Active:", "REMASTER");
-        } else {
-            Notifications_Emit("Ben's RST", "Active:", "CD OST");
+void SetTrackVariant(s32 seqKey, int variant) {
+    int i;
+    for (i = 0; i < ARRAY_COUNT(kSeqs); i++) {
+        if (kSeqs[i].key == seqKey && variant < kSeqs[i].numVariants) {
+            kSeqs[i].currentVariant = variant;
+            LoadAndBindStreamedSequenceVar(&kSeqs[i]);
+            break;
+        }
+    }
+}
+
+// The two patches below are related to the clock tower roof cutscenes for replacing Skull Kid's scream sound 
+// (I found it easier to patch but may consider using hooks again in the future for more compat)
+
+RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion1(DmStk* this, PlayState* play) {
+    static bool sMoonCallPlayed = false;
+    double shouldWind = recomp_get_config_double("winding");
+
+    switch (play->csCtx.curFrame) {
+    case 140:
+        Audio_PlaySfx_AtPosWithVolumeTransition(&this->actor.projectedPos, NA_SE_EN_STALKIDS_FLOAT, 80);
+        break;
+
+    case 258:
+        Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_TURN);
+        break;
+
+    case 524:
+        Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_TURN);
+        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL04_ANGER);
+        break;
+
+    case 534:
+        Actor_PlaySfx(&this->actor, NA_SE_EN_PO_ROLL);
+        break;
+
+    case 678:
+
+        if (shouldWind) {
+
+            Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
+
+        }
+        else {
+
+            Audio_PlayFanfare(NA_BGM_GET_HEART);
+
+        }
+
+        break;
+
+    default:
+        break;
+    }
+
+    if ((this->animIndex == SK_ANIM_OCARINA_JUGGLE) && (play->csCtx.curFrame < 700)) {
+        if (Animation_OnFrame(&this->skelAnime, 5.0f) || Animation_OnFrame(&this->skelAnime, 25.0f)) {
+            Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_OTEDAMA1);
+        }
+        else if (Animation_OnFrame(&this->skelAnime, 17.0f) || Animation_OnFrame(&this->skelAnime, 40.0f)) {
+            Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_OTEDAMA2);
         }
     }
 
+    if (shouldWind) {
+
+        if (play->csCtx.curFrame >= 700) {
+            if (!sMoonCallPlayed) {
+                Audio_PlayFanfare(NA_BGM_FAILURE_0);
+                sMoonCallPlayed = true;
+            }
+        }
+        else {
+
+            sMoonCallPlayed = false;
+        }
+
+    }
+}
+
+
+RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion2(DmStk* this, PlayState* play) {
+    static bool sMoonCallPlayed = false;
+    double shouldWind = recomp_get_config_double("winding");
+
+    switch (play->csCtx.curFrame) {
+    case 40:
+        Audio_PlaySfx_AtPosWithVolumeTransition(&this->actor.projectedPos, NA_SE_EN_STALKIDS_FLOAT, 80);
+        break;
+
+    case 234:
+        Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_TURN);
+        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL04_ANGER);
+        break;
+
+    case 244:
+        Actor_PlaySfx(&this->actor, NA_SE_EN_PO_ROLL);
+        break;
+
+    case 388:
+
+        if (shouldWind) {
+
+            Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
+
+        }
+        else {
+
+            Audio_PlayFanfare(NA_BGM_GET_HEART);
+
+        }
+        break;
+
+    default:
+        break;
+    }
+
+    if (shouldWind) {
+
+        if (play->csCtx.curFrame >= 408) {
+            if (!sMoonCallPlayed) {
+                Audio_PlayFanfare(NA_BGM_FAILURE_0);
+                sMoonCallPlayed = true;
+            }
+        }
+        else {
+            sMoonCallPlayed = false;
+        }
+
+    }
+}
+
+// Swoon counter for when you attack skull kid
+
+RECOMP_HOOK_RETURN("DmStk_ClockTower_DeflectHit")
+void killlink(PlayState* play) {
+
+    Swoon++;
+
+    if (Swoon >= 3) {
+
+    pendingSwoon = true;
+
+    }
+}
+
+// Swoon removal
+
+RECOMP_HOOK("func_80169ECC")
+void removeswooneffects(PlayState* play) {
+
+    s32 scene = play->sceneId;
+
+    if (scene == SCENE_OKUJOU) {
+
+        pendingSwoon = false;
+        kSeqs[29].currentVariant = 0;
+        Swoon = 0;
+        Play_EnableMotionBlur(0);
+        gPlayVisMonoColor.r = 0;
+        gPlayVisMonoColor.g = 0;
+        gPlayVisMonoColor.b = 0;
+        gPlayVisMonoColor.a = 0;
+
+    }
+}
+
+// SOT Swoon Removal
+
+RECOMP_HOOK("DayTelop_Main")
+void resetredeffectplease() {
+
+    kSeqs[29].currentVariant = 0;
+    Swoon = 0;
+    pendingSwoon = false;
+}
+
+// Fairy Remove Swoon (this also just plays regardless of having a fairy so it's not really working as intended but I'm keeping it because it does the job)
+
+RECOMP_HOOK("func_80840770")
+void removeswooneffectsbutwithafairy(PlayState* play) {
+
+    s32 scene = play->sceneId;
+
+    if (scene == SCENE_OKUJOU) {
+
+        pendingSwoon = false;
+        kSeqs[29].currentVariant = 0;
+        Swoon = 0;
+        Play_EnableMotionBlur(0);
+        gPlayVisMonoColor.r = 0;
+        gPlayVisMonoColor.g = 0;
+        gPlayVisMonoColor.b = 0;
+        gPlayVisMonoColor.a = 0;
+
+    }
 }
