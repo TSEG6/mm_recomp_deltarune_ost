@@ -3,7 +3,7 @@
 
 #include "global.h"
 #include "recomp/modding.h"
-#include "recomp/recomputils.h"
+#include "recomputils.h"
 #include "audio_api/sequence.h"
 #include "audio_api/porcelain.h"
 #include "recomp/recompconfig.h"
@@ -38,6 +38,12 @@ static int SwordValue = 0;
 static int Swoon = 0;
 static bool pendingSwoon = false;
 bool disableSwitchingOnCurrentTrack[SEQ_PLAYER_MAX];
+int MusicRandoActive;
+
+RECOMP_CALLBACK("*", recomp_on_init) void on_init() {
+
+    MusicRandoActive = recomp_is_dependency_met("mm_music_randomizer") == DEPENDENCY_STATUS_FOUND;
+}
 
 typedef enum {
 
@@ -259,6 +265,13 @@ static void LoadAndBindStreamedSequenceVar(ostSeqMapVar* spec) {
 
     if (spec->currentVariant == spec->lastLoadedVariant) {
         return;
+    }
+
+    if (MusicRandoActive) {
+
+        if (spec->lastLoadedVariant != -1) {
+            return;
+        }
     }
 
     char* fileToLoad = spec->files[spec->currentVariant];
@@ -741,6 +754,7 @@ void SetTrackVariant(s32 seqKey, int variant) {
 
 RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion1(DmStk* this, PlayState* play) {
     static bool sMoonCallPlayed = false;
+    static s32 sMoonCallTimer = 0;
     double shouldWind = recomp_get_config_double("winding");
 
     switch (play->csCtx.curFrame) {
@@ -762,18 +776,23 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion1(DmStk* this, P
         break;
 
     case 678:
-
         if (shouldWind) {
-
             Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
-
         }
         else {
 
-            Audio_PlayFanfare(NA_BGM_GET_HEART);
+            if (MusicRandoActive) {
+
+                Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
+
+            }
+            else {
+
+                Audio_PlayFanfare(NA_BGM_GET_HEART);
+
+            }
 
         }
-
         break;
 
     default:
@@ -790,24 +809,57 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion1(DmStk* this, P
     }
 
     if (shouldWind) {
-
-        if (play->csCtx.curFrame >= 700) {
-            if (!sMoonCallPlayed) {
-                Audio_PlayFanfare(NA_BGM_FAILURE_0);
-                sMoonCallPlayed = true;
+        if (MusicRandoActive) {
+            if (play->csCtx.curFrame >= 700) {
+                if (sMoonCallTimer < 128) {
+                    if ((sMoonCallTimer & 0x1F) == 0) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON);
+                    }
+                    else if ((sMoonCallTimer & 0x1F) == 16) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON2);
+                    }
+                    sMoonCallTimer++;
+                }
+            }
+            else {
+                sMoonCallTimer = 0;
             }
         }
         else {
-
-            sMoonCallPlayed = false;
+            if (play->csCtx.curFrame >= 700) {
+                if (!sMoonCallPlayed) {
+                    Audio_PlayFanfare(NA_BGM_FAILURE_0);
+                    sMoonCallPlayed = true;
+                }
+            }
+            else {
+                sMoonCallPlayed = false;
+            }
         }
+    }
+    else {
 
+        if (play->csCtx.curFrame >= 700) {
+            if (sMoonCallTimer < 128) {
+                if ((sMoonCallTimer & 0x1F) == 0) {
+                    Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON);
+                }
+                else if ((sMoonCallTimer & 0x1F) == 16) {
+                    Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON2);
+                }
+                sMoonCallTimer++;
+            }
+        }
+        else {
+            sMoonCallTimer = 0;
+        }
     }
 }
 
 
 RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion2(DmStk* this, PlayState* play) {
     static bool sMoonCallPlayed = false;
+    static s32 sMoonCallTimer = 0;
     double shouldWind = recomp_get_config_double("winding");
 
     switch (play->csCtx.curFrame) {
@@ -825,16 +877,21 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion2(DmStk* this, P
         break;
 
     case 388:
-
         if (shouldWind) {
-
             Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
-
         }
         else {
 
-            Audio_PlayFanfare(NA_BGM_GET_HEART);
+            if (MusicRandoActive) {
 
+                Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
+
+            }
+            else {
+
+                Audio_PlayFanfare(NA_BGM_GET_HEART);
+
+            }
         }
         break;
 
@@ -843,15 +900,53 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion2(DmStk* this, P
     }
 
     if (shouldWind) {
+        if (MusicRandoActive) {
 
-        if (play->csCtx.curFrame >= 408) {
-            if (!sMoonCallPlayed) {
-                Audio_PlayFanfare(NA_BGM_FAILURE_0);
-                sMoonCallPlayed = true;
+            if (play->csCtx.curFrame >= 408) {
+                if (sMoonCallTimer < 128) {
+                    if ((sMoonCallTimer & 0x1F) == 0) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON);
+                    }
+                    else if ((sMoonCallTimer & 0x1F) == 16) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON2);
+                    }
+                    sMoonCallTimer++;
+                }
+            }
+            else {
+                sMoonCallTimer = 0;
             }
         }
         else {
-            sMoonCallPlayed = false;
+            if (play->csCtx.curFrame >= 408) {
+                if (!sMoonCallPlayed) {
+                    Audio_PlayFanfare(NA_BGM_FAILURE_0);
+                    sMoonCallPlayed = true;
+                }
+            }
+            else {
+                sMoonCallPlayed = false;
+            }
+        }
+    }
+    else {
+
+        if (MusicRandoActive) {
+
+            if (play->csCtx.curFrame >= 408) {
+                if (sMoonCallTimer < 128) {
+                    if ((sMoonCallTimer & 0x1F) == 0) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON);
+                    }
+                    else if ((sMoonCallTimer & 0x1F) == 16) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON2);
+                    }
+                    sMoonCallTimer++;
+                }
+            }
+            else {
+                sMoonCallTimer = 0;
+            }
         }
 
     }
@@ -861,6 +956,12 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion2(DmStk* this, P
 
 RECOMP_HOOK_RETURN("DmStk_ClockTower_DeflectHit")
 void killlink(PlayState* play) {
+
+    if (MusicRandoActive) {
+
+        return;
+
+    }
 
     Swoon++;
 
