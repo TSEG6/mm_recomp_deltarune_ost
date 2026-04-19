@@ -190,7 +190,8 @@ static ostSeqMapVar kSeqs[] = {
                                            "NA_BGM_MINI_BOSS_BK.ogg", 
                                            "NA_BGM_MBHCLOSET.ogg" },                             5, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_GET_SMALL_ITEM,             { "NA_BGM_GET_SMALL_ITEM.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
-    { NA_BGM_ASTRAL_OBSERVATORY,         { "NA_BGM_ASTRAL_OBSERVATORY.ogg" },                    1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_ASTRAL_OBSERVATORY,         { "NA_BGM_ASTRAL_OBSERVATORY.ogg",
+                                           "NA_BGM_SHOOTING_GALLERY_ALT.ogg"},                   2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_CAVERN,                     { "NA_BGM_CAVERN.ogg",
                                            "NA_BGM_CAVERN_2.ogg",
                                            "NA_BGM_CAVERN_3.ogg"},                               2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -206,7 +207,8 @@ static ostSeqMapVar kSeqs[] = {
                                            "NA_BGM_SHOP_2.ogg",
                                            "NA_BGM_SHOP_3.ogg"},                                 3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_OWL,                        { "NA_BGM_OWL.ogg" },                                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
-    { NA_BGM_SHOOTING_GALLERY,           { "NA_BGM_SHOOTING_GALLERY.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SHOOTING_GALLERY,           { "NA_BGM_SHOOTING_GALLERY.ogg",
+                                           "NA_BGM_SHOOTING_GALLERY_ALT.ogg" },                  2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_SONATA_OF_AWAKENING,        { "NA_BGM_SONATA_OF_AWAKENING.ogg" },                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_GORON_LULLABY,              { "NA_BGM_GORON_LULLABY.ogg" },                         1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_NEW_WAVE_BOSSA_NOVA,        { "NA_BGM_NEW_WAVE_BOSSA_NOVA.ogg" },                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -346,18 +348,21 @@ static void UpdateBossMusicByScene(PlayState* play) {
     LoadAndBindStreamedSequenceVar(&kSeqs[59]);
     LoadAndBindStreamedSequenceVar(&kSeqs[19]);
 
-    // Controls the swamp cruise theme
+    // Controls the swamp cruise theme & observatory day 3 theme
     if (CURRENT_DAY == 3) {
 
         kSeqs[12].currentVariant = 1;
+        kSeqs[49].currentVariant = 1;
 
     }
     else {
 
         kSeqs[12].currentVariant = 0;
+        kSeqs[49].currentVariant = 0;
 
     }
     LoadAndBindStreamedSequenceVar(&kSeqs[12]);
+    LoadAndBindStreamedSequenceVar(&kSeqs[49]);
 
     if (gSaveContext.save.isNight == false) {
 
@@ -400,6 +405,20 @@ static void UpdateBossMusicByScene(PlayState* play) {
         kSeqs[74].currentVariant = 0;
         LoadAndBindStreamedSequenceVar(&kSeqs[74]);
     }
+
+    // Mini game background theme handling
+
+    if (CURRENT_DAY == 3 && gSaveContext.save.isNight == true) {
+
+        kSeqs[61].currentVariant = 1;
+
+    }
+    else {
+
+        kSeqs[61].currentVariant = 0;
+
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[61]);
 
     lastScene = scene;
     lastRoom = room;
@@ -777,21 +796,17 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion1(DmStk* this, P
 
     case 678:
         if (shouldWind) {
-            Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
+            if (MusicRandoActive) {
+                Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
+            }
         }
         else {
-
             if (MusicRandoActive) {
-
                 Actor_PlaySfx(&this->actor, NA_SE_EN_STALKIDS_STRETCH);
-
             }
             else {
-
                 Audio_PlayFanfare(NA_BGM_GET_HEART);
-
             }
-
         }
         break;
 
@@ -839,19 +854,21 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion1(DmStk* this, P
     }
     else {
 
-        if (play->csCtx.curFrame >= 700) {
-            if (sMoonCallTimer < 128) {
-                if ((sMoonCallTimer & 0x1F) == 0) {
-                    Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON);
+        if (MusicRandoActive) {
+            if (play->csCtx.curFrame >= 700) {
+                if (sMoonCallTimer < 128) {
+                    if ((sMoonCallTimer & 0x1F) == 0) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON);
+                    }
+                    else if ((sMoonCallTimer & 0x1F) == 16) {
+                        Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON2);
+                    }
+                    sMoonCallTimer++;
                 }
-                else if ((sMoonCallTimer & 0x1F) == 16) {
-                    Actor_PlaySfx(&this->actor, NA_SE_EN_STAL20_CALL_MOON2);
-                }
-                sMoonCallTimer++;
             }
-        }
-        else {
-            sMoonCallTimer = 0;
+            else {
+                sMoonCallTimer = 0;
+            }
         }
     }
 }
@@ -948,7 +965,6 @@ RECOMP_PATCH void DmStk_PlaySfxForClockTowerIntroCutsceneVersion2(DmStk* this, P
                 sMoonCallTimer = 0;
             }
         }
-
     }
 }
 

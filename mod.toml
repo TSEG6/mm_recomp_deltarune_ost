@@ -8,7 +8,7 @@
 id = "mm_recomp_deltarune_ost"
 
 # Version of this mod.
-version = "1.0.0"
+version = "1.0.1"
 
 # The name that will show up for this mod in the mod menu. This should be human readable.
 display_name = "DELTARUNE Music Pack"
@@ -166,6 +166,7 @@ additional_files = [
     "audio/NA_BGM_SARIAS_SONG.ogg",
     "audio/NA_BGM_SHARPS_CURSE.ogg",
     "audio/NA_BGM_SHOOTING_GALLERY.ogg",
+	"audio/NA_BGM_SHOOTING_GALLERY_ALT.ogg",
     "audio/NA_BGM_SHOP.ogg",
 	"audio/NA_BGM_SHOP_2.ogg",
 	"audio/NA_BGM_SHOP_3.ogg",
