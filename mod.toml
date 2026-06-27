@@ -8,7 +8,7 @@
 id = "mm_recomp_deltarune_ost"
 
 # Version of this mod.
-version = "1.0.1"
+version = "1.1.0"
 
 # The name that will show up for this mod in the mod menu. This should be human readable.
 display_name = "DELTARUNE Music Pack"
@@ -84,6 +84,7 @@ additional_files = [
     "audio/NA_BGM_CLOCK_TOWN_DAY_1.ogg",
     "audio/NA_BGM_CLOCK_TOWN_DAY_2.ogg",
     "audio/NA_BGM_CLOCK_TOWN_DAY_3.ogg",
+	"audio/NA_BGM_CLOCK_TOWN_DAY_3_ALT.ogg",
 	"audio/NA_BGM_CLOCK_TOWN_DAY_4.ogg",
     "audio/NA_BGM_CREMIA_CARRIAGE.ogg",
     "audio/NA_BGM_DEKU_PALACE.ogg",
@@ -95,7 +96,8 @@ additional_files = [
     "audio/NA_BGM_ENEMY.ogg",
 	"audio/NA_BGM_ENEMY_2.ogg",
 	"audio/NA_BGM_ENEMY_3.ogg",
-    "audio/NA_BGM_FAILURE_0.ogg",
+	"audio/NA_BGM_ENEMY_4.ogg",
+	"audio/NA_BGM_ENEMY_SCARY.ogg",
     "audio/NA_BGM_FAILURE_1.ogg",
     "audio/NA_BGM_FAIRY_FOUNTAIN.ogg",
     "audio/NA_BGM_FILE_SELECT.ogg",
@@ -135,6 +137,7 @@ additional_files = [
     "audio/NA_BGM_MAJORAS_INCARNATION.ogg",
     "audio/NA_BGM_MAJORAS_MASK.ogg",
     "audio/NA_BGM_MAJORAS_THEME.ogg",
+	"audio/NA_BGM_MAJORAS_THEME_MONOLOGUE.ogg",
 	"audio/NA_BGM_MAJORAS_THEME_ROOF.ogg",
     "audio/NA_BGM_MAJORAS_WRATH.ogg",
     "audio/NA_BGM_MARINE_RESEARCH_LAB.ogg",
@@ -147,6 +150,8 @@ additional_files = [
 	"audio/NA_BGM_MINI_BOSS_2.ogg",
 	"audio/NA_BGM_MINI_BOSS_ROOF.ogg",
 	"audio/NA_BGM_MINI_BOSS_BK.ogg",
+	"audio/NA_BGM_MINI_BOSS_IKANA.ogg",
+	"audio/NA_BGM_MINI_BOSS_REMATCH.ogg",
     "audio/NA_BGM_MOONS_DESTRUCTION.ogg",
     "audio/NA_BGM_MOUNTAIN_REGION.ogg",
     "audio/NA_BGM_MUSIC_BOX_HOUSE.ogg",
@@ -180,6 +185,7 @@ additional_files = [
     "audio/NA_BGM_SWAMP_CRUISE.ogg",
 	"audio/NA_BGM_SWAMP_CRUISE_ALT.ogg",
     "audio/NA_BGM_SWAMP_REGION.ogg",
+	"audio/NA_BGM_SWAMP_REGION_DAY_2.ogg",
     "audio/NA_BGM_SWORD_TRAINING_HALL.ogg",
     "audio/NA_BGM_TATL_AND_TAEL.ogg",
     "audio/NA_BGM_TERMINA_FIELD.ogg",

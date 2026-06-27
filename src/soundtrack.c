@@ -65,7 +65,7 @@ typedef enum {
 // This is the struct for the music replacements
 typedef struct {
     s32 key;                
-    char* files[6];         
+    char* files[12];         
     int numVariants;        // How many variants of music there is (I maybe have added 1 extra to each and now it's just the trend)
     int currentVariant;     // Variant selected
     ostStreamKind kind;
@@ -121,7 +121,8 @@ static ostSeqMapVar kSeqs[] = {
                                            "NA_BGM_TERMINA_FIELD_SWORD_SLOW.ogg"},               3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_CHASE,                      { "NA_BGM_CHASE.ogg" },                                 1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_MAJORAS_THEME,              { "NA_BGM_MAJORAS_THEME.ogg",
-                                           "NA_BGM_MAJORAS_THEME_ROOF.ogg" },                    2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+                                           "NA_BGM_MAJORAS_THEME_ROOF.ogg", 
+                                           "NA_BGM_MAJORAS_THEME_MONOLOGUE.ogg"},                3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_CLOCK_TOWER,                { "NA_BGM_CLOCK_TOWER.ogg" },                           1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_STONE_TOWER_TEMPLE,         { "NA_BGM_STONE_TOWER_TEMPLE.ogg" },                    1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_INV_STONE_TOWER_TEMPLE,     { "NA_BGM_INV_STONE_TOWER_TEMPLE.ogg" },                1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -130,11 +131,12 @@ static ostSeqMapVar kSeqs[] = {
     { NA_BGM_FAILURE_1,                  { "NA_BGM_FAILURE_1.ogg" },                             1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_HAPPY_MASK_SALESMAN,        { "NA_BGM_HAPPY_MASK_SALESMAN.ogg" },                   1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_SONG_OF_HEALING,            { "NA_BGM_SONG_OF_HEALING.ogg" },                       1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
-    { NA_BGM_SWAMP_REGION,               { "NA_BGM_SWAMP_REGION.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_SWAMP_REGION,               { "NA_BGM_SWAMP_REGION.ogg",
+                                           "NA_BGM_SWAMP_REGION_DAY_2.ogg"},                     1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_ALIEN_INVASION,             { "NA_BGM_ALIEN_INVASION.ogg",
                                            "NA_BGM_ALIEN_SCENE.ogg" },                           2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_SWAMP_CRUISE,               { "NA_BGM_SWAMP_CRUISE.ogg",
-                                           "NA_BGM_SWAMP_CRUISE_ALT.ogg" },                      2, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+                                           "NA_BGM_SWAMP_CRUISE_ALT.ogg"},                       2, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_SHARPS_CURSE,               { "NA_BGM_SHARPS_CURSE.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_GREAT_BAY_REGION,           { "NA_BGM_GREAT_BAY_REGION.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_IKANA_REGION,               { "NA_BGM_IKANA_REGION.ogg" },                          1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -144,7 +146,8 @@ static ostSeqMapVar kSeqs[] = {
     { NA_BGM_CLOCK_TOWN_DAY_1,           { "NA_BGM_CLOCK_TOWN_DAY_1.ogg",
                                            "NA_BGM_CLOCK_TOWN_DAY_4.ogg" },                      2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_CLOCK_TOWN_DAY_2,           { "NA_BGM_CLOCK_TOWN_DAY_2.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
-    { NA_BGM_CLOCK_TOWN_DAY_3,           { "NA_BGM_CLOCK_TOWN_DAY_3.ogg" },                      1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+    { NA_BGM_CLOCK_TOWN_DAY_3,           { "NA_BGM_CLOCK_TOWN_DAY_3.ogg", 
+                                           "NA_BGM_CLOCK_TOWN_DAY_3_ALT.ogg"},                   1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_FILE_SELECT,                { "NA_BGM_FILE_SELECT.ogg",
                                            "NA_BGM_FILE_SELECT_2.ogg",
                                            "NA_BGM_FILE_SELECT_3.ogg" },                         3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -152,7 +155,9 @@ static ostSeqMapVar kSeqs[] = {
     { NA_BGM_ENEMY,                      { "NA_BGM_ENEMY.ogg",
                                            "NA_BGM_ENEMY_2.ogg", 
                                            "NA_BGM_ENEMY_3.ogg",
-                                           "NA_BGM_CHASE.ogg"},                               4, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+                                           "NA_BGM_CHASE.ogg", 
+                                           "NA_BGM_ENEMY_4.ogg", 
+                                           "NA_BGM_ENEMY_SCARY.ogg"},                            6, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_BOSS,                       { "NA_BGM_BOSS.ogg",
                                            "NA_BGM_BOSS_2.ogg",
                                            "NA_BGM_BOSS_3.ogg",
@@ -188,7 +193,9 @@ static ostSeqMapVar kSeqs[] = {
                                            "NA_BGM_ENEMY_3.ogg",
                                            "NA_BGM_MINI_BOSS_ROOF.ogg",
                                            "NA_BGM_MINI_BOSS_BK.ogg", 
-                                           "NA_BGM_MBHCLOSET.ogg" },                             5, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+                                           "NA_BGM_MBHCLOSET.ogg",
+                                           "NA_BGM_MINI_BOSS_IKANA.ogg", 
+                                           "NA_BGM_MINI_BOSS_REMATCH.ogg"},                      7, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_GET_SMALL_ITEM,             { "NA_BGM_GET_SMALL_ITEM.ogg" },                        1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_ASTRAL_OBSERVATORY,         { "NA_BGM_ASTRAL_OBSERVATORY.ogg",
                                            "NA_BGM_SHOOTING_GALLERY_ALT.ogg"},                   2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -329,6 +336,15 @@ static void UpdateBossMusicByScene(PlayState* play) {
     }
     LoadAndBindStreamedSequenceVar(&kSeqs[42]);
 
+    // This changes the theme of the swamp on day 2
+    if (CURRENT_DAY == 2) {
+        kSeqs[10].currentVariant = 1;
+    }
+    else {
+        kSeqs[10].currentVariant = 0;
+    }
+    LoadAndBindStreamedSequenceVar(&kSeqs[10]);
+
     // This controls the clock town theme for Day 4 & the shop theme day variants
     if (CURRENT_DAY < 4) {
 
@@ -348,21 +364,43 @@ static void UpdateBossMusicByScene(PlayState* play) {
     LoadAndBindStreamedSequenceVar(&kSeqs[59]);
     LoadAndBindStreamedSequenceVar(&kSeqs[19]);
 
-    // Controls the swamp cruise theme & observatory day 3 theme
+    // Day 3 checks for swamp cruise & observatory & also checks for game progress for the day 3 theme
     if (CURRENT_DAY == 3) {
+
+        const QuestItem remainsEnum[] = {
+            QUEST_REMAINS_ODOLWA,
+            QUEST_REMAINS_GOHT,
+            QUEST_REMAINS_GYORG,
+            QUEST_REMAINS_TWINMOLD
+        };
+
+        s32 remains = 0;
 
         kSeqs[12].currentVariant = 1;
         kSeqs[49].currentVariant = 1;
 
+        for (s32 i = 0; i < 4; i++) {
+            if (gSaveContext.save.saveInfo.inventory.questItems & (1 << remainsEnum[i])) {
+                remains++;
+            }
+        }
+
+        if (remains == 4) {
+            kSeqs[21].currentVariant = 0;
+        }
+        else {
+            kSeqs[21].currentVariant = 1;
+        }
+
     }
     else {
-
         kSeqs[12].currentVariant = 0;
+        kSeqs[21].currentVariant = 0;
         kSeqs[49].currentVariant = 0;
-
     }
     LoadAndBindStreamedSequenceVar(&kSeqs[12]);
     LoadAndBindStreamedSequenceVar(&kSeqs[49]);
+    LoadAndBindStreamedSequenceVar(&kSeqs[21]);
 
     if (gSaveContext.save.isNight == false) {
 
@@ -424,7 +462,7 @@ static void UpdateBossMusicByScene(PlayState* play) {
     lastRoom = room;
 
     // Progression Battle Music
-    // This works by checking the remains and if you have 2 or more it will use the second variant or if you're in sakon's hideout
+    // This works by checking the remains, the room, and your sword
 
     s32 remains = 0;
     if (CHECK_QUEST_ITEM(QUEST_REMAINS_ODOLWA))   remains++;
@@ -432,19 +470,58 @@ static void UpdateBossMusicByScene(PlayState* play) {
     if (CHECK_QUEST_ITEM(QUEST_REMAINS_GYORG))    remains++;
     if (CHECK_QUEST_ITEM(QUEST_REMAINS_TWINMOLD)) remains++;
 
-    if (scene != SCENE_SECOM) {
-
-        if (remains >= 2) {
-            kSeqs[24].currentVariant = 1;
-        }
-        else {
-            kSeqs[24].currentVariant = 0;
-        }
-    }
-    else {
+    if (scene == SCENE_SECOM) {
 
         kSeqs[24].currentVariant = 3;
 
+    }
+    else if (scene == SCENE_HAKASHITA) {
+
+        kSeqs[24].currentVariant = 5;
+
+    }
+    else if (scene == SCENE_KAKUSIANA) {
+
+        kSeqs[24].currentVariant = 5;
+
+    }
+    else if (scene == SCENE_LAST_LINK) {
+
+        kSeqs[24].currentVariant = 5;
+
+    }
+    else {
+
+        switch (remains) {
+
+        case 0:
+        case 1:
+            kSeqs[24].currentVariant = 0;
+            break;
+
+        case 2:
+            kSeqs[24].currentVariant = 1;
+            break;
+        case 3:
+            if (SwordValue == 2) {
+                kSeqs[24].currentVariant = 4;
+            }
+            else {
+                kSeqs[24].currentVariant = 1;
+            }
+            break;
+        case 4: 
+            if (SwordValue >= 1) {
+                kSeqs[24].currentVariant = 4;
+            }
+            else {
+                kSeqs[24].currentVariant = 1;
+            }
+            break;
+
+        default:
+            break;
+        }
     }
     LoadAndBindStreamedSequenceVar(&kSeqs[24]);
 
@@ -534,6 +611,11 @@ static void UpdateBossMusicByScene(PlayState* play) {
         LoadAndBindStreamedSequenceVar(&kSeqs[47]);
         break;
 
+    case SCENE_HAKASHITA:       // Below Graves
+        kSeqs[47].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
     case SCENE_INISIE_R:       // ISTT Gomess
         if (room == 11) {
             kSeqs[47].currentVariant = 2;
@@ -574,10 +656,20 @@ static void UpdateBossMusicByScene(PlayState* play) {
         break;
 
     case SCENE_RANDOM:       // Secret Shrine
-        kSeqs[47].currentVariant = 2;
+        kSeqs[47].currentVariant = 7;
         LoadAndBindStreamedSequenceVar(&kSeqs[47]);
         kSeqs[50].currentVariant = 2;
         LoadAndBindStreamedSequenceVar(&kSeqs[50]);
+        break;
+
+    case SCENE_CASTLE:       // Ikana Castle
+        kSeqs[47].currentVariant = 1;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    case SCENE_IKNINSIDE:       // Ikana Castle Lair
+        kSeqs[47].currentVariant = 6;
+        LoadAndBindStreamedSequenceVar(&kSeqs[47]);
         break;
 
     case SCENE_REDEAD:       // BOTW (not the game)
@@ -588,6 +680,16 @@ static void UpdateBossMusicByScene(PlayState* play) {
     case SCENE_MUSICHOUSE:   // Music Box House
         kSeqs[47].currentVariant = 5;
         LoadAndBindStreamedSequenceVar(&kSeqs[47]);
+        break;
+
+    case SCENE_INSIDETOWER:       // Clock Tower
+        kSeqs[2].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[2]);
+        break;
+
+    case SCENE_SPOT00:       // Cutscene
+        kSeqs[2].currentVariant = 2;
+        LoadAndBindStreamedSequenceVar(&kSeqs[2]);
         break;
 
     default:
