@@ -175,6 +175,7 @@ additional_files = [
     "audio/NA_BGM_SHOP.ogg",
 	"audio/NA_BGM_SHOP_2.ogg",
 	"audio/NA_BGM_SHOP_3.ogg",
+	"audio/NA_BGM_SHOP_3_ALT.ogg",
     "audio/NA_BGM_SNOWHEAD_CLEAR.ogg",
     "audio/NA_BGM_SNOWHEAD_TEMPLE.ogg",
     "audio/NA_BGM_SONATA_OF_AWAKENING.ogg",

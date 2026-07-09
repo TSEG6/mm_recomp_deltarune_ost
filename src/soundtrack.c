@@ -212,7 +212,8 @@ static ostSeqMapVar kSeqs[] = {
     { NA_BGM_KOTAKE_POTION_SHOP,         { "NA_BGM_KOTAKE_POTION_SHOP.ogg" },                    1, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_SHOP,                       { "NA_BGM_SHOP.ogg",
                                            "NA_BGM_SHOP_2.ogg",
-                                           "NA_BGM_SHOP_3.ogg"},                                 3, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
+                                           "NA_BGM_SHOP_3.ogg", 
+                                           "NA_BGM_SHOP_3_ALT.ogg"},                             4, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_OWL,                        { "NA_BGM_OWL.ogg" },                                   1, 0, STREAM_FANFARE, AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
     { NA_BGM_SHOOTING_GALLERY,           { "NA_BGM_SHOOTING_GALLERY.ogg",
                                            "NA_BGM_SHOOTING_GALLERY_ALT.ogg" },                  2, 0, STREAM_BGM,     AUDIOAPI_SEQ_IO_NONE, 0, false, -1 },
@@ -352,9 +353,13 @@ static void UpdateBossMusicByScene(PlayState* play) {
         int day = CURRENT_DAY;
         if (day < 1) day = 1;
 
-        kSeqs[59].currentVariant = day - 1;
-        kSeqs[19].currentVariant = 0;
-
+        if (day == 3 && gSaveContext.save.isNight == true) {
+            kSeqs[59].currentVariant = 3;
+        }
+        else {
+            kSeqs[59].currentVariant = day - 1;
+            kSeqs[19].currentVariant = 0;
+        }
     }
     else {
 
